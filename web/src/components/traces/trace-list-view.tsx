@@ -82,14 +82,14 @@ export function TraceListView({ traces }: { traces: ApiTraceSummary[] }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="lookover-label">Trace history</div>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-slate-900">Recent agent runs</h1>
+          <h1 className="mt-2 text-[26px] font-semibold tracking-[-0.04em] text-slate-900">Recent agent runs</h1>
         </div>
         <ButtonLink href="/scans" tone="secondary">
           Open pre-run scans
         </ButtonLink>
       </div>
 
-      <section className="lookover-card px-6 py-6">
+      <section className="lookover-card px-5 py-5">
         <div className="grid gap-4 xl:grid-cols-[1.2fr,0.9fr,0.9fr,0.8fr,0.8fr,auto]">
           <input
             className="lookover-input"
@@ -127,7 +127,7 @@ export function TraceListView({ traces }: { traces: ApiTraceSummary[] }) {
           />
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-black px-5 text-sm font-medium text-white transition hover:bg-slate-900"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-[#111113] px-5 text-[13px] font-semibold text-white transition hover:bg-[#1b1b20]"
             onClick={applyFilters}
           >
             Apply filters
@@ -138,15 +138,15 @@ export function TraceListView({ traces }: { traces: ApiTraceSummary[] }) {
       <section className="lookover-card overflow-hidden">
         <table className="min-w-full">
           <thead className="border-b border-lookover-border bg-slate-50/70">
-            <tr className="text-left text-[12px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
-              <th className="px-5 py-4">Trace ID</th>
-              <th className="px-5 py-4">Agent ID</th>
-              <th className="px-5 py-4">Root Intent</th>
-              <th className="px-5 py-4">Status</th>
-              <th className="px-5 py-4">Outcome</th>
-              <th className="px-5 py-4">Spans</th>
-              <th className="px-5 py-4">Started</th>
-              <th className="px-5 py-4">Duration</th>
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
+              <th className="px-4 py-3.5">Trace ID</th>
+              <th className="px-4 py-3.5">Agent ID</th>
+              <th className="px-4 py-3.5">Root Intent</th>
+              <th className="px-4 py-3.5">Status</th>
+              <th className="px-4 py-3.5">Outcome</th>
+              <th className="px-4 py-3.5">Spans</th>
+              <th className="px-4 py-3.5">Started</th>
+              <th className="px-4 py-3.5">Duration</th>
             </tr>
           </thead>
           <tbody>
@@ -198,12 +198,12 @@ export function TraceListView({ traces }: { traces: ApiTraceSummary[] }) {
             ) : null}
           </tbody>
         </table>
-        <div className="flex items-center justify-between px-6 py-5 text-[14px] text-lookover-text-muted">
+        <div className="flex items-center justify-between px-5 py-4 text-[13px] text-lookover-text-muted">
           <span>{filtered.length} total traces</span>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="rounded-xl border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
               onClick={() => setPage((value) => Math.max(1, value - 1))}
               disabled={currentPage <= 1}
             >
@@ -214,7 +214,7 @@ export function TraceListView({ traces }: { traces: ApiTraceSummary[] }) {
             </span>
             <button
               type="button"
-              className="rounded-xl border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
               onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
               disabled={currentPage >= totalPages}
             >

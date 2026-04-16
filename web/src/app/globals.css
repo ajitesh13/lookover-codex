@@ -4,22 +4,22 @@
 
 :root {
   color-scheme: light;
-  --lookover-bg: #fafaf9;
+  --lookover-bg: #f5f6f8;
   --lookover-panel: #ffffff;
-  --lookover-panel-subtle: #fbfbfd;
-  --lookover-sidebar: #f8f8fb;
-  --lookover-border: #e5e7eb;
-  --lookover-border-strong: #d7dbe2;
-  --lookover-text: #182033;
-  --lookover-text-muted: #64748b;
+  --lookover-panel-subtle: #f8f9fc;
+  --lookover-sidebar: #f7f7f8;
+  --lookover-border: #e4e7ec;
+  --lookover-border-strong: #d3d8e2;
+  --lookover-text: #111827;
+  --lookover-text-muted: #667085;
   --lookover-text-soft: #94a3b8;
-  --lookover-success: #23b26d;
-  --lookover-success-soft: #eaf8f0;
-  --lookover-warning: #f59e0b;
-  --lookover-warning-soft: #fff7e7;
-  --lookover-danger: #ff7a7a;
-  --lookover-danger-soft: #fff1f1;
-  --lookover-indigo: #5b5cf0;
+  --lookover-success: #16a34a;
+  --lookover-success-soft: #effbf3;
+  --lookover-warning: #d97706;
+  --lookover-warning-soft: #fff7eb;
+  --lookover-danger: #ef5f72;
+  --lookover-danger-soft: #fff3f5;
+  --lookover-indigo: #4f46e5;
   --lookover-sky: #0387df;
   --lookover-green: #15803d;
   --lookover-orange: #ea580c;
@@ -37,6 +37,7 @@
 
   body {
     @apply min-h-full bg-lookover-bg font-sans text-lookover-text antialiased;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 246, 248, 0.96));
   }
 
   body::before {
@@ -44,10 +45,10 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background-image:
-      radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.035) 1px, transparent 0);
-    background-size: 28px 28px;
-    opacity: 0.6;
+    background:
+      radial-gradient(circle at top left, rgba(15, 23, 42, 0.05), transparent 34%),
+      radial-gradient(circle at top right, rgba(79, 70, 229, 0.04), transparent 28%);
+    opacity: 0.7;
     z-index: -1;
   }
 
@@ -77,22 +78,22 @@
 
 @layer components {
   .lookover-card {
-    @apply rounded-[26px] border border-lookover-border bg-white shadow-lookover-card;
+    @apply rounded-[18px] border border-lookover-border bg-white shadow-lookover-card;
   }
 
   .lookover-card-tight {
-    @apply rounded-[20px] border border-lookover-border bg-white shadow-lookover-card;
+    @apply rounded-[14px] border border-lookover-border bg-white shadow-lookover-card;
   }
 
   .lookover-label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-lookover-text-muted;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-lookover-text-muted;
   }
 
   .lookover-input {
-    @apply h-11 rounded-2xl border border-lookover-border bg-white px-4 text-sm text-lookover-text shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200;
+    @apply h-10 rounded-xl border border-lookover-border bg-white px-3.5 text-[14px] text-lookover-text outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200;
   }
 
   .lookover-table-cell {
-    @apply px-5 py-4 align-middle text-[15px] text-lookover-text;
+    @apply px-4 py-3.5 align-middle text-[14px] text-lookover-text;
   }
 }

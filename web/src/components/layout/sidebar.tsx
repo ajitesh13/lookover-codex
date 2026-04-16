@@ -73,20 +73,20 @@ export function Sidebar({
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 flex w-[220px] flex-col border-r border-lookover-border bg-lookover-sidebar shadow-lookover-rail">
-      <div className="flex h-[110px] items-center border-b border-lookover-border px-8">
+    <aside className="fixed inset-y-0 left-0 z-20 flex w-[214px] flex-col border-r border-lookover-border/90 bg-white/90 backdrop-blur-md shadow-lookover-rail">
+      <div className="flex h-[88px] items-center border-b border-lookover-border/90 px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white shadow-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black text-white shadow-sm">
             <span className="text-sm font-semibold tracking-[-0.04em]">L</span>
           </div>
           <div>
-            <div className="text-[19px] font-semibold tracking-[-0.04em] text-slate-900">Lookover</div>
+            <div className="text-[17px] font-semibold tracking-[-0.04em] text-slate-900">Lookover</div>
             <div className="text-[12px] text-lookover-text-muted">Codex</div>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-10">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-7">
         {navItems.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
@@ -95,32 +95,32 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               className={cn(
-                "flex h-12 items-center gap-3 rounded-2xl px-5 text-[15px] font-medium text-slate-500 transition",
+                "flex h-11 items-center gap-3 rounded-xl px-4 text-[14px] font-medium text-slate-500 transition",
                 active
-                  ? "bg-black text-white shadow-sm"
-                  : "hover:bg-white hover:text-slate-900",
+                  ? "bg-[#0f1115] text-white shadow-sm"
+                  : "hover:bg-black/[0.03] hover:text-slate-900",
               )}
             >
-              <Icon className="h-[18px] w-[18px]" />
+              <Icon className="h-[17px] w-[17px]" />
               <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-lookover-border px-5 py-5">
+      <div className="border-t border-lookover-border/90 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-[#262626] text-base font-medium text-white shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-[#262626] text-sm font-medium text-white shadow-sm">
             {getInitials(reviewer.email)}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-[14px] font-medium text-slate-900">{reviewer.email}</div>
+            <div className="truncate text-[13px] font-medium text-slate-900">{reviewer.email}</div>
             <div className="text-[12px] text-lookover-text-muted">{reviewer.role === "reviewer" ? "Owner" : reviewer.role}</div>
           </div>
         </div>
         <button
           type="button"
-          className="mt-4 text-[14px] font-medium text-lookover-text-muted transition hover:text-slate-900"
+          className="mt-3 text-[13px] font-medium text-lookover-text-muted transition hover:text-slate-900"
           onClick={handleLogout}
         >
           Sign out

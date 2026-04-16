@@ -11,9 +11,9 @@ export function DashboardShell({
   return (
     <div className="min-h-screen bg-lookover-bg">
       <Sidebar reviewer={reviewer} />
-      <div className="min-h-screen pl-[220px]">
+      <div className="min-h-screen pl-[214px]">
         <Topbar />
-        <main className="px-6 py-7 lg:px-12 lg:py-10">{children}</main>
+        <main className="px-5 py-6 lg:px-10 lg:py-8">{children}</main>
       </div>
     </div>
   );

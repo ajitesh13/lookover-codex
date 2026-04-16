@@ -129,17 +129,17 @@ function ShareActions({ traceId }: { traceId: string }) {
     <div className="relative">
       <button
         type="button"
-        className="inline-flex h-12 items-center gap-2 rounded-2xl border border-lookover-border bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border border-lookover-border bg-white px-4 text-[13px] font-semibold text-slate-900 transition hover:bg-slate-50"
         onClick={() => setOpen((value) => !value)}
       >
         <Sparkles className="h-4 w-4" />
         Share
       </button>
       {open ? (
-        <div className="absolute right-0 top-14 z-20 w-[270px] rounded-[20px] border border-lookover-border bg-white p-2 shadow-lookover-card">
+        <div className="absolute right-0 top-12 z-20 w-[270px] rounded-[14px] border border-lookover-border bg-white p-2 shadow-lookover-card">
           <button
             type="button"
-            className="flex w-full flex-col items-start rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
+            className="flex w-full flex-col items-start rounded-xl px-4 py-3 text-left transition hover:bg-slate-50"
             onClick={() => createShare("audit_log_plus_evaluation")}
             disabled={loadingMode !== null}
           >
@@ -150,7 +150,7 @@ function ShareActions({ traceId }: { traceId: string }) {
           </button>
           <button
             type="button"
-            className="flex w-full flex-col items-start rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
+            className="flex w-full flex-col items-start rounded-xl px-4 py-3 text-left transition hover:bg-slate-50"
             onClick={() => createShare("audit_log_only")}
             disabled={loadingMode !== null}
           >
@@ -179,30 +179,30 @@ function SummaryCounter({
 }) {
   const toneClass =
     tone === "danger"
-      ? "border-rose-200 bg-rose-50/50 text-rose-400"
+      ? "border-rose-200 bg-rose-50/70 text-rose-500"
       : tone === "warning"
-        ? "border-amber-300 bg-amber-50/60 text-amber-600"
-        : "border-emerald-300 bg-emerald-50/60 text-emerald-600";
+        ? "border-amber-200 bg-amber-50/80 text-amber-700"
+        : "border-emerald-200 bg-emerald-50/80 text-emerald-700";
   const Icon = tone === "danger" ? AlertTriangle : tone === "warning" ? ShieldAlert : CheckCircle2;
 
   return (
     <button
       type="button"
       className={cn(
-        "flex h-[78px] items-center justify-between rounded-[22px] border px-6 text-left transition hover:bg-white",
+        "flex h-[70px] items-center justify-between rounded-[16px] border px-5 text-left transition hover:bg-white",
         toneClass,
       )}
       onClick={onClick}
     >
       <div className="flex items-center gap-4">
         <span className="inline-flex h-8 w-1 rounded-full bg-current/90" />
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-current/20 bg-white/60">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-current/20 bg-white/70">
           <Icon className="h-4 w-4" />
         </span>
-        <span className="text-[16px] font-medium">{label}</span>
+        <span className="text-[15px] font-medium">{label}</span>
       </div>
       <div className="flex items-center gap-4">
-        <span className="rounded-xl border border-current/20 bg-white/70 px-3 py-1.5 text-[14px] font-medium">
+        <span className="rounded-lg border border-current/20 bg-white/75 px-3 py-1.5 text-[13px] font-medium">
           {count}
         </span>
         <ChevronDown className="h-4 w-4 opacity-60" />
@@ -224,25 +224,25 @@ function FindingPanel({
     tone === "danger"
       ? "border-rose-200 bg-rose-50/40"
       : tone === "warning"
-        ? "border-amber-300 bg-amber-50/40"
-        : "border-emerald-300 bg-emerald-50/40";
+        ? "border-amber-200 bg-amber-50/40"
+        : "border-emerald-200 bg-emerald-50/40";
 
   return (
-    <section className={cn("rounded-[22px] border p-4", toneClasses)}>
+    <section className={cn("rounded-[16px] border p-4", toneClasses)}>
       <div className="flex items-center justify-between">
         <h3 className="text-[16px] font-semibold text-slate-900">{title}</h3>
-        <span className="rounded-xl border border-white/60 bg-white/80 px-2.5 py-1 text-[13px] font-medium text-slate-500">
+        <span className="rounded-lg border border-white/60 bg-white/80 px-2.5 py-1 text-[12px] font-medium text-slate-500">
           {items.length}
         </span>
       </div>
       <div className="mt-4 space-y-3">
         {items.length === 0 ? (
-          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 text-[14px] text-lookover-text-muted">
+          <div className="rounded-xl border border-white/70 bg-white/80 px-4 py-4 text-[14px] text-lookover-text-muted">
             No findings in this section for the selected trace.
           </div>
         ) : (
           items.slice(0, 3).map((finding) => (
-            <div key={finding.id} className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
+            <div key={finding.id} className="rounded-xl border border-white/70 bg-white/80 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
                 <span>{finding.framework}</span>
                 <span>{finding.control_id}</span>
@@ -297,7 +297,7 @@ export function TraceWorkspace({
         </div>
       ) : null}
 
-      <section className="lookover-card px-8 py-7">
+      <section className="lookover-card px-6 py-6">
         <div className="flex flex-col gap-7">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-5">
@@ -310,7 +310,7 @@ export function TraceWorkspace({
                 <span className="font-mono text-[18px] text-slate-900">{detail.trace.trace_id}</span>
                 <button
                   type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-lookover-border text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-lookover-border text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
                   onClick={copyTraceId}
                 >
                   <Copy className="h-4 w-4" />
@@ -326,21 +326,21 @@ export function TraceWorkspace({
               <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-10">
                 <div>
                   <div className="text-[14px] text-lookover-text-muted">Agent</div>
-                  <div className="mt-2 text-[18px] font-medium text-slate-900">{detail.trace.agent_id}</div>
+                  <div className="mt-2 text-[17px] font-medium text-slate-900">{detail.trace.agent_id}</div>
                 </div>
                 <div>
                   <div className="text-[14px] text-lookover-text-muted">Started</div>
-                  <div className="mt-2 text-[18px] font-medium text-slate-900">{formatCompactDate(detail.trace.created_at)}</div>
+                  <div className="mt-2 text-[17px] font-medium text-slate-900">{formatCompactDate(detail.trace.created_at)}</div>
                 </div>
                 <div>
                   <div className="text-[14px] text-lookover-text-muted">Duration</div>
-                  <div className="mt-2 text-[18px] font-medium text-slate-900">
+                  <div className="mt-2 text-[17px] font-medium text-slate-900">
                     {formatDuration(detail.trace.created_at, detail.trace.updated_at)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[14px] text-lookover-text-muted">Spans</div>
-                  <div className="mt-2 text-[18px] font-medium text-slate-900">{detail.spans.length}</div>
+                  <div className="mt-2 text-[17px] font-medium text-slate-900">{detail.spans.length}</div>
                 </div>
               </div>
             </div>
@@ -349,7 +349,7 @@ export function TraceWorkspace({
               {!readOnly ? <ShareActions traceId={detail.trace.trace_id} /> : null}
               <button
                 type="button"
-                className="inline-flex h-12 items-center gap-2 rounded-2xl border border-lookover-border bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-lookover-border bg-white px-4 text-[13px] font-semibold text-slate-900 transition hover:bg-slate-50"
               >
                 <Sparkles className="h-4 w-4" />
                 AIBOM
@@ -377,9 +377,9 @@ export function TraceWorkspace({
         </div>
       </section>
 
-      <div className={cn("grid gap-5", selectedSpan ? "xl:grid-cols-[1.55fr,0.9fr]" : "grid-cols-1")}>
+      <div className={cn("grid gap-4", selectedSpan ? "xl:grid-cols-[1.55fr,0.9fr]" : "grid-cols-1")}>
         <section className="lookover-card overflow-hidden">
-          <div className="px-6 py-6">
+          <div className="px-5 py-5">
             {flattened.map(({ node, depth }) => {
               const counts = findingCountsForSpan(detail, node.span.span_id);
               const isSelected = selectedSpanId === node.span.span_id;
@@ -390,8 +390,8 @@ export function TraceWorkspace({
                 <div
                   key={node.span.span_id}
                   className={cn(
-                    "flex items-center gap-3 rounded-[22px] px-4 py-3 transition",
-                    isSelected ? "bg-black text-white shadow-sm" : "hover:bg-slate-50",
+                    "flex items-center gap-3 rounded-[16px] border border-transparent px-4 py-2.5 transition",
+                    isSelected ? "border-black bg-black text-white shadow-sm" : "hover:border-lookover-border hover:bg-slate-50",
                   )}
                   style={{ paddingLeft: `${depth * 28 + 16}px` }}
                 >
@@ -404,10 +404,10 @@ export function TraceWorkspace({
                       setShowFindings(false);
                     }}
                   >
-                    <span className={cn("inline-flex h-12 w-12 items-center justify-center rounded-2xl", className)}>
-                      <Icon className="h-5 w-5" />
+                    <span className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl", className)}>
+                      <Icon className="h-4 w-4" />
                     </span>
-                    <span className="truncate text-[18px] font-medium tracking-[-0.02em]">
+                    <span className="truncate text-[15px] font-medium tracking-[-0.02em]">
                       {node.span.name || titleCase(node.span.event_type)}
                     </span>
                   </button>
@@ -416,7 +416,7 @@ export function TraceWorkspace({
                       {counts.violations > 0 ? (
                         <span
                           className={cn(
-                            "inline-flex min-w-[34px] items-center justify-center rounded-full border px-2 py-1 text-[14px] font-medium",
+                            "inline-flex min-w-[34px] items-center justify-center rounded-md border px-2 py-1 text-[13px] font-medium",
                             isSelected
                               ? "border-rose-300/40 bg-rose-400/10 text-rose-200"
                               : "border-rose-200 bg-rose-50 text-rose-500",
@@ -428,7 +428,7 @@ export function TraceWorkspace({
                       {totalFlags > 0 ? (
                         <span
                           className={cn(
-                            "inline-flex min-w-[40px] items-center justify-center rounded-full border px-2 py-1 text-[14px] font-medium",
+                            "inline-flex min-w-[40px] items-center justify-center rounded-md border px-2 py-1 text-[13px] font-medium",
                             isSelected
                               ? "border-amber-300/40 bg-amber-400/10 text-amber-200"
                               : "border-amber-300 bg-amber-50 text-amber-600",
@@ -446,13 +446,13 @@ export function TraceWorkspace({
         </section>
 
         {selectedSpan ? (
-          <section className="lookover-card px-7 py-6">
+          <section className="lookover-card px-6 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge tone="danger" className="text-[14px]">
                   {titleCase(selectedSpan.event_type)} / Routing
                 </Badge>
-                <span className="rounded-xl bg-indigo-50 px-3 py-1.5 font-mono text-[15px] text-indigo-900">
+                <span className="rounded-lg bg-indigo-50 px-3 py-1.5 font-mono text-[14px] text-indigo-900">
                   {selectedSpan.name}
                 </span>
               </div>
@@ -490,14 +490,14 @@ export function TraceWorkspace({
 
             <div className="mt-8 border-t border-lookover-border pt-7">
               <div className="lookover-label">Routing decision (LLM output)</div>
-              <div className="mt-4 rounded-[20px] bg-indigo-50 px-5 py-4 text-[15px] leading-8 text-slate-600">
+              <div className="mt-4 rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 text-[14px] leading-7 text-slate-600">
                 {extractRoutingDecision(selectedSpan)}
               </div>
             </div>
 
             <div className="mt-8 border-t border-lookover-border pt-7">
               <div className="lookover-label">Agent state changes from this node</div>
-              <pre className="mt-4 overflow-x-auto rounded-[20px] bg-indigo-50 px-5 py-4 font-mono text-[14px] leading-8 text-slate-600">
+              <pre className="mt-4 overflow-x-auto rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 font-mono text-[13px] leading-7 text-slate-600">
                 {extractStateChanges(selectedSpan)}
               </pre>
             </div>
@@ -505,13 +505,13 @@ export function TraceWorkspace({
             <div className="mt-8 border-t border-lookover-border pt-7">
               <div className="lookover-label">Raw evidence</div>
               {selectedEvidence.length === 0 ? (
-                <div className="mt-4 rounded-[20px] border border-dashed border-lookover-border px-5 py-4 text-[14px] text-lookover-text-muted">
+                <div className="mt-4 rounded-[14px] border border-dashed border-lookover-border px-4 py-4 text-[14px] text-lookover-text-muted">
                   No evidence rows were attached to this node.
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
                   {selectedEvidence.map((item) => (
-                    <div key={item.id} className="rounded-[20px] border border-lookover-border bg-slate-50 px-5 py-4">
+                    <div key={item.id} className="rounded-[14px] border border-lookover-border bg-slate-50 px-4 py-4">
                       <div className="text-[13px] font-medium uppercase tracking-[0.14em] text-lookover-text-muted">
                         {item.source} · {item.field_name}
                       </div>

@@ -61,7 +61,7 @@ function TrendChart({ values }: { values: number[] }) {
     .join(" ");
 
   return (
-    <div className="relative h-[220px] w-full overflow-hidden rounded-[22px] border border-dashed border-slate-200 bg-slate-50/70 px-5 py-6">
+    <div className="relative h-[220px] w-full overflow-hidden rounded-[16px] border border-dashed border-slate-200 bg-slate-50/70 px-5 py-6">
       <div className="absolute inset-x-5 top-8 h-px border-t border-dashed border-slate-200" />
       <div className="absolute inset-x-5 top-[48%] h-px border-t border-dashed border-slate-200" />
       <div className="absolute inset-x-5 bottom-10 h-px border-t border-dashed border-slate-200" />
@@ -105,59 +105,59 @@ export function OverviewView({
   );
 
   return (
-    <div className="space-y-9">
-      <div className="grid gap-5 xl:grid-cols-5">
+    <div className="space-y-6">
+      <div className="grid gap-4 xl:grid-cols-5">
         {complianceScores.map((item) => (
-          <section key={item.label} className="lookover-card px-8 py-7">
-            <div className={`text-[14px] font-semibold uppercase tracking-[0.18em] ${item.className}`}>
+          <section key={item.label} className="lookover-card px-6 py-5">
+            <div className={`text-[12px] font-semibold uppercase tracking-[0.14em] ${item.className}`}>
               {item.label}
             </div>
-            <div className="mt-6 flex items-end gap-1">
-              <span className="text-[52px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
+            <div className="mt-4 flex items-end gap-1">
+              <span className="text-[42px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
                 {item.value.toFixed(1)}
               </span>
-              <span className="pb-1 text-[22px] font-medium text-slate-500">%</span>
+              <span className="pb-1 text-[18px] font-medium text-slate-400">%</span>
             </div>
           </section>
         ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr,1fr]">
-        <section className="lookover-card px-8 py-7">
+      <div className="grid gap-4 xl:grid-cols-[1.15fr,1fr]">
+        <section className="lookover-card px-6 py-5">
           <div className="flex items-start justify-between">
             <div>
               <div className="lookover-label">Total traces (30d)</div>
-              <div className="mt-6 text-[52px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
+              <div className="mt-4 text-[42px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
                 {traces.length}
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 text-slate-400">
-              <Sparkles className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-lookover-border bg-slate-50 text-slate-400">
+              <Sparkles className="h-4 w-4" />
             </div>
           </div>
         </section>
 
-        <section className="lookover-card px-8 py-7">
+        <section className="lookover-card px-6 py-5">
           <div className="flex items-start justify-between">
             <div>
               <div className="lookover-label">Open violations</div>
-              <div className="mt-6 text-[52px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
+              <div className="mt-4 text-[42px] font-semibold leading-none tracking-[-0.05em] text-slate-900">
                 {openViolations}
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 text-slate-400">
-              <CircleAlert className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-lookover-border bg-slate-50 text-slate-400">
+              <CircleAlert className="h-4 w-4" />
             </div>
           </div>
         </section>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr,0.85fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.15fr,0.85fr]">
         <section className="lookover-card overflow-hidden">
-          <div className="border-b border-lookover-border px-8 py-6">
+          <div className="border-b border-lookover-border px-6 py-5">
             <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">Recent Traces</h2>
           </div>
-          <div className="space-y-4 px-8 py-8">
+          <div className="space-y-2 px-6 py-5">
             {latestTraces.map((trace) => {
               const outcome = deriveTraceOutcome(trace);
               const tone =
@@ -165,9 +165,9 @@ export function OverviewView({
               return (
                 <div
                   key={trace.trace_id}
-                  className="grid grid-cols-[118px,1fr,auto,90px] items-center gap-4 text-[15px]"
+                  className="grid grid-cols-[92px,1fr,auto,82px] items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[14px] transition hover:border-lookover-border hover:bg-slate-50/80"
                 >
-                  <span className="font-mono text-[15px] text-slate-500">{trace.trace_id.slice(0, 8)}</span>
+                  <span className="font-mono text-[14px] text-slate-500">{trace.trace_id.slice(0, 8)}</span>
                   <span className="truncate text-slate-900">{trace.agent_id || "agent"}</span>
                   <Badge tone={tone}>{outcome.toLowerCase()}</Badge>
                   <span className="text-right text-slate-500">{formatRelativeTime(trace.updated_at)}</span>
@@ -178,19 +178,19 @@ export function OverviewView({
         </section>
 
         <section className="lookover-card overflow-hidden">
-          <div className="border-b border-lookover-border px-8 py-6">
+          <div className="border-b border-lookover-border px-6 py-5">
             <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">Compliance Scores</h2>
           </div>
-          <div className="flex h-[430px] items-end justify-around gap-8 px-10 pb-8 pt-10">
+          <div className="flex h-[360px] items-end justify-around gap-6 px-8 pb-6 pt-8">
             {highlightedBars.map((item) => (
-              <div key={item.label} className="flex h-full w-full max-w-[160px] flex-col items-center justify-end gap-6">
+              <div key={item.label} className="flex h-full w-full max-w-[144px] flex-col items-center justify-end gap-5">
                 <div className="flex h-full w-full items-end justify-center">
                   <div
-                    className="w-[72px] rounded-t-xl bg-[#3b3b3b]"
-                    style={{ height: `${Math.max(40, item.value * 2.6)}px` }}
+                    className="w-[62px] rounded-t-lg bg-[#2b2f36]"
+                    style={{ height: `${Math.max(36, item.value * 2.2)}px` }}
                   />
                 </div>
-                <div className="text-[16px] text-slate-400">{item.label}</div>
+                <div className="text-[14px] font-medium text-slate-400">{item.label}</div>
               </div>
             ))}
           </div>
@@ -198,7 +198,7 @@ export function OverviewView({
       </div>
 
       <section className="lookover-card overflow-hidden">
-        <div className="border-b border-lookover-border px-8 py-6">
+        <div className="border-b border-lookover-border px-6 py-5">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
               30-Day GDPR Compliance Trend
@@ -213,7 +213,7 @@ export function OverviewView({
             </div>
           </div>
         </div>
-        <div className="px-8 py-8">
+        <div className="px-6 py-6">
           <div className="mb-6 flex items-center gap-2 text-sm text-lookover-text-muted">
             <BarChart3 className="h-4 w-4" />
             <span>Trend line generated from current framework readiness signals.</span>

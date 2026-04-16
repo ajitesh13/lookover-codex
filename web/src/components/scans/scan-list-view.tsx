@@ -26,7 +26,7 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="lookover-label">Pre-run scans</div>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-slate-900">Run readiness history</h1>
+          <h1 className="mt-2 text-[26px] font-semibold tracking-[-0.04em] text-slate-900">Run readiness history</h1>
         </div>
         <ButtonLink href="/traces" tone="secondary">
           Open trace history
@@ -36,15 +36,15 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
       <section className="lookover-card overflow-hidden">
         <table className="min-w-full">
           <thead className="border-b border-lookover-border bg-slate-50/70">
-            <tr className="text-left text-[12px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
-              <th className="px-5 py-4">Scan ID</th>
-              <th className="px-5 py-4">Project</th>
-              <th className="px-5 py-4">Strict</th>
-              <th className="px-5 py-4">Outcome</th>
-              <th className="px-5 py-4">Readiness</th>
-              <th className="px-5 py-4">Frameworks</th>
-              <th className="px-5 py-4">Findings</th>
-              <th className="px-5 py-4">Created</th>
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
+              <th className="px-4 py-3.5">Scan ID</th>
+              <th className="px-4 py-3.5">Project</th>
+              <th className="px-4 py-3.5">Strict</th>
+              <th className="px-4 py-3.5">Outcome</th>
+              <th className="px-4 py-3.5">Readiness</th>
+              <th className="px-4 py-3.5">Frameworks</th>
+              <th className="px-4 py-3.5">Findings</th>
+              <th className="px-4 py-3.5">Created</th>
             </tr>
           </thead>
           <tbody>
@@ -96,12 +96,12 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
             ) : null}
           </tbody>
         </table>
-        <div className="flex items-center justify-between px-6 py-5 text-[14px] text-lookover-text-muted">
+        <div className="flex items-center justify-between px-5 py-4 text-[13px] text-lookover-text-muted">
           <span>{scans.length} total scans</span>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="rounded-xl border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
               onClick={() => setPage((value) => Math.max(1, value - 1))}
               disabled={currentPage <= 1}
             >
@@ -112,7 +112,7 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
             </span>
             <button
               type="button"
-              className="rounded-xl border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-lookover-border px-3 py-2 transition hover:bg-slate-50 disabled:opacity-50"
               onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
               disabled={currentPage >= totalPages}
             >

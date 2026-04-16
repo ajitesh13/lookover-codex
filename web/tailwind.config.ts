@@ -33,8 +33,8 @@ const config: Config = {
         },
       },
       boxShadow: {
-        "lookover-card": "0 2px 6px rgba(15, 23, 42, 0.03), 0 14px 34px rgba(15, 23, 42, 0.05)",
-        "lookover-rail": "0 10px 30px rgba(15, 23, 42, 0.04)",
+        "lookover-card": "0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 24px rgba(16, 24, 40, 0.05)",
+        "lookover-rail": "0 1px 2px rgba(16, 24, 40, 0.05), 0 18px 38px rgba(16, 24, 40, 0.05)",
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

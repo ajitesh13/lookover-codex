@@ -29,11 +29,11 @@ export function Topbar() {
   const title = resolveTitle(pathname);
 
   return (
-    <header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-lookover-border bg-white/90 px-12 backdrop-blur">
-      <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">{title}</div>
-      <div className="inline-flex items-center gap-3 text-[14px] font-medium text-slate-500">
-        <span className="h-4 w-4 rounded-full bg-emerald-400/20 p-[3px]">
-          <span className="block h-full w-full rounded-full bg-emerald-400" />
+    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-lookover-border/90 bg-white/75 px-5 backdrop-blur-md lg:px-10">
+      <div className="text-[17px] font-semibold tracking-[-0.03em] text-slate-900">{title}</div>
+      <div className="inline-flex items-center gap-2.5 text-[13px] font-medium text-slate-500">
+        <span className="h-3.5 w-3.5 rounded-full bg-emerald-400/15 p-[3px]">
+          <span className="block h-full w-full rounded-full bg-emerald-500" />
         </span>
         <span>System healthy</span>
       </div>
