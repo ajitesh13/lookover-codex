@@ -1,0 +1,370 @@
+.layout {
+  display: grid;
+  gap: 18px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 12px;
+  padding: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+}
+
+.field input,
+.field select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.filterAction {
+  align-self: end;
+}
+
+.summaryCard {
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.summaryTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.summaryTitle {
+  display: grid;
+  gap: 8px;
+}
+
+.summaryTitle h2 {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.summaryTitle p {
+  color: var(--foreground-muted);
+  line-height: 1.6;
+}
+
+.summaryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.summaryStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background-muted);
+  display: grid;
+  gap: 6px;
+}
+
+.statLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+}
+
+.statValue {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.findingsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.findingGroup {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.findingGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.findingGroupHeader h3 {
+  font-size: 15px;
+}
+
+.findingList {
+  display: grid;
+  gap: 10px;
+}
+
+.findingItem {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background-muted);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.findingTitle {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.findingMeta {
+  color: var(--foreground-subtle);
+  font-size: 12px;
+}
+
+.findingBody {
+  color: var(--foreground-muted);
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.findingEvidence {
+  display: grid;
+  gap: 6px;
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.treePanel,
+.detailPanel {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.panelTitle h3 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.panelTitle p {
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.treeRoot {
+  display: grid;
+  gap: 10px;
+}
+
+.treeChildren {
+  display: grid;
+  gap: 10px;
+  margin-left: 22px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
+.treeNode {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+
+.treeNodeSelected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.treeButton {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+}
+
+.treeNodeLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.treeIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.treeText {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.treeName {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.treeMeta {
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.treeBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.detailBody {
+  display: grid;
+  gap: 12px;
+}
+
+.detailSection {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background-muted);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.detailSection h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--foreground-subtle);
+}
+
+.detailList {
+  display: grid;
+  gap: 8px;
+}
+
+.detailList code {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--background);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.readonlyBanner {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--background-muted);
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.shareWrap {
+  position: relative;
+}
+
+.shareMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 220px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--background);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 6px;
+  z-index: 5;
+}
+
+.shareOption {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.shareOption:hover {
+  background: var(--background-muted);
+}
+
+.shareStatus {
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summaryStats,
+  .findingsGrid,
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}

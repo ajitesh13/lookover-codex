@@ -1,0 +1,104 @@
+.layout {
+  display: grid;
+  gap: 18px;
+}
+
+.detailCard {
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.detailTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detailTitle {
+  display: grid;
+  gap: 8px;
+}
+
+.detailTitle h2 {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.detailTitle p {
+  color: var(--foreground-muted);
+  line-height: 1.6;
+}
+
+.detailMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.findingList {
+  display: grid;
+  gap: 12px;
+}
+
+.findingCard {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.findingTitle {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.findingMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.findingBody {
+  color: var(--foreground-muted);
+  line-height: 1.6;
+}
+
+.twoColumn {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.evidenceList {
+  display: grid;
+  gap: 10px;
+}
+
+.evidenceItem {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background-muted);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.evidenceLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+}
+
+.evidenceValue {
+  font-size: 13px;
+  color: var(--foreground-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+}
