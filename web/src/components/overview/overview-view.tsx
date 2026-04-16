@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ApiTraceDetail, ApiTraceSummary } from "@/lib/lookover-api";
 import {
   deriveTraceOutcome,
+  formatCompactDate,
   formatRelativeTime,
   getToneFromStatus,
 } from "@/lib/lookover-format";
@@ -14,6 +15,7 @@ type OverviewViewProps = {
   latestTraceId: string | null;
   latestScanId: string | null;
   latestDetail: ApiTraceDetail | null;
+  scoreDetail: ApiTraceDetail | null;
 };
 
 const scoreCards = [
@@ -90,14 +92,21 @@ export function OverviewView({
   latestTraceId,
   latestScanId,
   latestDetail,
+  scoreDetail,
 }: OverviewViewProps) {
   const latestTraces = traces.slice(0, 6);
   const openViolations = latestDetail
     ? latestDetail.findings.filter((item) => getToneFromStatus(item.status) === "danger").length
     : 0;
+  const scoreSourceIsFallback = Boolean(
+    latestDetail &&
+      scoreDetail &&
+      latestDetail.findings.length === 0 &&
+      latestDetail.trace.trace_id !== scoreDetail.trace.trace_id,
+  );
   const complianceScores = scoreCards.map((card) => ({
     label: humanizeFramework(card.key),
-    value: getFrameworkScore(latestDetail, card.key),
+    value: getFrameworkScore(scoreDetail, card.key),
     className: card.className,
   }));
   const highlightedBars = complianceScores.filter((item) => item.label === "GDPR" || item.label === "SOC 2");
@@ -107,6 +116,17 @@ export function OverviewView({
 
   return (
     <div className="space-y-6">
+      {scoreSourceIsFallback && scoreDetail ? (
+        <section className="lookover-card-tight flex flex-col gap-2 px-5 py-4 text-[14px] text-lookover-text-muted md:flex-row md:items-center md:justify-between">
+          <span>
+            Latest runtime trace from {formatCompactDate(latestDetail?.trace.updated_at)} does not include compliance findings yet, so these framework cards are using the most recent evaluated trace.
+          </span>
+          <Link href={`/traces/${scoreDetail.trace.trace_id}`} className="font-medium text-slate-900 transition hover:text-lookover-indigo">
+            Open evaluated trace
+          </Link>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-5">
         {complianceScores.map((item) => (
           <section key={item.label} className="lookover-card px-6 py-5">

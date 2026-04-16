@@ -68,10 +68,93 @@ function flattenTree(nodes: TraceTreeNode[], depth = 0): Array<{ node: TraceTree
   return nodes.flatMap((node) => [{ node, depth }, ...flattenTree(node.children, depth + 1)]);
 }
 
+function getSpanMetadata(span: ApiSpan) {
+  const payload = span.payload ?? {};
+  const extra = payload.extra;
+  if (!extra || typeof extra !== "object" || Array.isArray(extra)) return {};
+  const metadata = (extra as Record<string, unknown>).metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  return metadata as Record<string, unknown>;
+}
+
+function getLanggraphNode(span: ApiSpan) {
+  const payload = span.payload ?? {};
+  return (
+    safeText(payload.node_name ?? payload.nodeName ?? getSpanMetadata(span).langgraph_node).trim() || ""
+  );
+}
+
+function isGenericSpanName(value?: string | null) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return !normalized || ["chain_start", "chain_end", "chain_error", "llm_start", "llm_end", "llm_error"].includes(normalized);
+}
+
+function inferSpanKind(span: ApiSpan) {
+  const eventType = span.event_type.toUpperCase();
+  const nodeName = getLanggraphNode(span).toLowerCase();
+
+  if (eventType.startsWith("TRACE_")) return "TRACE";
+  if (eventType.includes("ERROR") || getToneFromStatus(span.status) === "danger") return "ERROR";
+  if (eventType === "TOOL_CALL" || eventType.startsWith("TOOL_")) return "TOOL_CALL";
+  if (eventType === "HUMAN_HANDOFF") return "HUMAN_HANDOFF";
+  if (eventType === "DECISION") return "DECISION";
+  if (eventType === "MODEL_INFERENCE") return "MODEL_INFERENCE";
+  if (eventType.startsWith("LLM_")) {
+    return nodeName.includes("supervisor") || nodeName.includes("router") || nodeName.includes("planner")
+      ? "DECISION"
+      : "MODEL_INFERENCE";
+  }
+  if (eventType.startsWith("CHAIN_")) {
+    return nodeName ? "NODE" : "TRACE";
+  }
+  return eventType;
+}
+
+function getSpanLabel(span: ApiSpan) {
+  const payload = span.payload ?? {};
+  const kind = inferSpanKind(span);
+  const nodeName = getLanggraphNode(span);
+  const serialized = payload.serialized;
+  const serializedName =
+    serialized && typeof serialized === "object" && !Array.isArray(serialized)
+      ? safeText((serialized as Record<string, unknown>).name)
+      : "";
+  const toolName = safeText(payload.tool_name ?? serializedName).trim();
+
+  if (String(span.name).toUpperCase() === "DECISION") return "DECISION";
+  if (kind === "TOOL_CALL" && toolName) return toolName;
+  if (kind === "DECISION" && isGenericSpanName(span.name)) return "DECISION";
+  if (nodeName) return nodeName;
+  if (span.name && !isGenericSpanName(span.name)) return span.name;
+  return titleCase(kind);
+}
+
+function getSpanTone(span: ApiSpan) {
+  const kind = inferSpanKind(span);
+  if (kind === "ERROR") return "danger" as const;
+  if (kind === "DECISION") return "warning" as const;
+  if (kind === "TOOL_CALL" || kind === "MODEL_INFERENCE") return "success" as const;
+  return "neutral" as const;
+}
+
+function shouldDisplaySpan(span: ApiSpan) {
+  const eventType = span.event_type.toUpperCase();
+  if (eventType.startsWith("TRACE_")) return false;
+  if (eventType === "CHAIN_END" || eventType === "LLM_END" || eventType === "TOOL_END") return false;
+  if (eventType === "CHAIN_START" && !getLanggraphNode(span)) return false;
+  return true;
+}
+
 function getSpanIcon(span: ApiSpan) {
-  const normalized = `${span.event_type} ${span.name}`.toLowerCase();
-  if (normalized.includes("decision") || normalized.includes("supervisor")) {
+  const kind = inferSpanKind(span);
+  if (kind === "ERROR") {
+    return { Icon: AlertTriangle, className: "bg-rose-50 text-rose-500" };
+  }
+  if (kind === "DECISION") {
     return { Icon: GitBranch, className: "bg-rose-50 text-rose-500" };
+  }
+  if (kind === "MODEL_INFERENCE") {
+    return { Icon: Sparkles, className: "bg-violet-50 text-violet-600" };
   }
   return { Icon: Wrench, className: "bg-sky-50 text-sky-600" };
 }
@@ -80,18 +163,25 @@ function extractRoutingDecision(span: ApiSpan) {
   const payload = span.payload ?? {};
   return (
     safeText(
-      payload.route_decision ??
+      payload.model_output ??
+        payload.route_decision ??
         payload.routing_decision ??
+        payload.response ??
         payload.llm_output ??
+        payload.prompts ??
         payload.message ??
-        payload.output,
+        payload.output ??
+        payload.error,
     ) || safeText(payload)
   );
 }
 
 function extractStateChanges(span: ApiSpan) {
   const payload = span.payload ?? {};
+  if (payload.state_after) return safeText(payload.state_after);
   if (payload.state_changes) return safeText(payload.state_changes);
+  if (payload.outputs) return safeText(payload.outputs);
+  if (payload.inputs) return safeText(payload.inputs);
   if (payload.next_worker) return safeText({ next_worker: payload.next_worker });
   return safeText(payload);
 }
@@ -269,11 +359,15 @@ export function TraceWorkspace({
   readOnly?: boolean;
   shareMode?: ShareMode;
 }) {
-  const tree = useMemo(() => buildTree(detail.spans), [detail.spans]);
+  const visibleSpans = useMemo(() => {
+    const filtered = detail.spans.filter(shouldDisplaySpan);
+    return filtered.length > 0 ? filtered : detail.spans;
+  }, [detail.spans]);
+  const tree = useMemo(() => buildTree(visibleSpans), [visibleSpans]);
   const flattened = useMemo(() => flattenTree(tree), [tree]);
   const [selectedSpanId, setSelectedSpanId] = useState("");
   const [showFindings, setShowFindings] = useState(shareMode !== "audit_log_only");
-  const selectedSpan = detail.spans.find((item) => item.span_id === selectedSpanId) ?? null;
+  const selectedSpan = visibleSpans.find((item) => item.span_id === selectedSpanId) ?? null;
   const selectedEvidence = detail.evidence.filter((item) => item.span_id === selectedSpan?.span_id);
   const grouped = countFindingsByCategory(detail.findings);
   const showCompliance = shareMode !== "audit_log_only";
@@ -408,7 +502,7 @@ export function TraceWorkspace({
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="truncate text-[15px] font-medium tracking-[-0.02em]">
-                      {node.span.name || titleCase(node.span.event_type)}
+                      {getSpanLabel(node.span)}
                     </span>
                   </button>
                   {showCompliance ? (
@@ -449,11 +543,11 @@ export function TraceWorkspace({
           <section className="lookover-card px-6 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge tone="danger" className="text-[14px]">
-                  {titleCase(selectedSpan.event_type)} / Routing
+                <Badge tone={getSpanTone(selectedSpan)} className="text-[14px]">
+                  {titleCase(inferSpanKind(selectedSpan))}
                 </Badge>
                 <span className="rounded-lg bg-indigo-50 px-3 py-1.5 font-mono text-[14px] text-indigo-900">
-                  {selectedSpan.name}
+                  {getSpanLabel(selectedSpan)}
                 </span>
               </div>
               <button

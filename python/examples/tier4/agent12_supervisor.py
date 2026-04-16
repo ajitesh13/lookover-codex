@@ -30,10 +30,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════
+#  LOOKOVER SDK
+# ═══════════════════════════════════════════════════════════════
+
+_sdk_path = os.getenv("LOOKOVER_SDK_PATH", "")
+if _sdk_path and _sdk_path not in sys.path:
+    sys.path.insert(0, _sdk_path)
+
+_sdk_backend = os.getenv("LOOKOVER_BASE_URL", "http://localhost:8080").rstrip("/")
+_prefer_reference_sdk = _sdk_backend.endswith(":8081")
+
+if _prefer_reference_sdk:
+    try:
+        from lookover_sdk.langgraph import LookoverLangGraphListener  # type: ignore[import-not-found] # noqa: E402
+    except ImportError:
+        from lookover_codex_sdk.langgraph import LookoverLangGraphListener  # noqa: E402
+else:
+    from lookover_codex_sdk.langgraph import LookoverLangGraphListener  # noqa: E402
+
+# ═══════════════════════════════════════════════════════════════
 #  LLM SETUP
 # ═══════════════════════════════════════════════════════════════
 
-PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+PROVIDER = os.getenv("LLM_PROVIDER", "vertexai").lower()
 
 if PROVIDER == "ollama":
     from langchain_ollama import ChatOllama
@@ -47,20 +66,18 @@ elif PROVIDER == "vertexai":
     llm = ChatVertexAI(
         project=os.getenv("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id"),
         location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-        model_name=os.getenv("VERTEXAI_MODEL", "gemini-1.5-flash-002"),
+        model_name=os.getenv("VERTEXAI_MODEL", "gemini-2.5-flash-lite"),
         temperature=0.0,
     )
 elif PROVIDER == "googleai":
     from langchain_google_genai import ChatGoogleGenerativeAI
     llm = ChatGoogleGenerativeAI(
-        model=os.getenv("GOOGLEAI_MODEL", "gemini-2.0-flash"),
+        model=os.getenv("GOOGLEAI_MODEL", "gemini-2.5-flash"),
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0.0,
     )
 else:
     raise ValueError(f"Unknown LLM_PROVIDER='{PROVIDER}'. Use 'ollama', 'vertexai', or 'googleai'.")
-
-from lookover_codex_sdk.langgraph import LookoverLangGraphListener  # noqa: E402
 
 _lookover = LookoverLangGraphListener(
     api_key=os.getenv("LOOKOVER_API_KEY", "lk_dev_local"),
@@ -68,7 +85,7 @@ _lookover = LookoverLangGraphListener(
     agent_version="1.0.0",
     model_provider=PROVIDER,
     model_version=getattr(llm, "model", getattr(llm, "model_name", "unknown")),
-    base_url=os.getenv("LOOKOVER_BASE_URL", "http://localhost:8080"),
+    base_url=_sdk_backend,
 )
 
 # ═══════════════════════════════════════════════════════════════
