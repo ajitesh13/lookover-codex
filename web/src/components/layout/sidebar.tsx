@@ -26,7 +26,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutGrid, enabled: true },
-  { href: "/traces", label: "Traces", icon: GitBranch, enabled: true, activePrefixes: ["/traces", "/shared"] },
+  { href: "/traces", label: "Traces", icon: GitBranch, enabled: true, activePrefixes: ["/traces"] },
   { href: "/scans", label: "Pre Run", icon: ScanSearch, enabled: true, activePrefixes: ["/scans", "/pre-run"] },
   { href: "/compliance", label: "Compliance", icon: Shield, enabled: false },
   { href: "/risk", label: "Risk", icon: ShieldAlert, enabled: false },

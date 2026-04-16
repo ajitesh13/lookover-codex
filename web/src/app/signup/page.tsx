@@ -14,6 +14,6 @@ export default async function SignupPage({
   const nextPath =
     typeof resolvedSearchParams.next === "string" && resolvedSearchParams.next.startsWith("/")
       ? resolvedSearchParams.next
-      : "/compliance";
+      : "/overview";
   return <AuthShell mode="signup" nextPath={nextPath} />;
 }

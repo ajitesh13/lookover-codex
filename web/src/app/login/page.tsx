@@ -14,6 +14,6 @@ export default async function LoginPage({
   const nextPath =
     typeof resolvedSearchParams.next === "string" && resolvedSearchParams.next.startsWith("/")
       ? resolvedSearchParams.next
-      : "/compliance";
+      : "/overview";
   return <AuthShell mode="login" nextPath={nextPath} />;
 }
