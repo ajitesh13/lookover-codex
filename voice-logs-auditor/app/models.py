@@ -187,6 +187,35 @@ class LegalHoldRequest(BaseModel):
     enabled: bool
 
 
+class TranscriptAuditRequest(BaseModel):
+    transcript: str
+    call_id: str | None = None
+    tenant: str = "lookover-voice-runs"
+    deployer: str = "voice-ops"
+    language: str = "en"
+    agent_version: str = "voice-runs-ui-v1"
+    policy_version: str = "policy-voice-runs-ui"
+    raw_audio_uri: str = "ui://transcript-input"
+    synthetic_audio_used: bool = False
+    synthetic_audio_marked: bool = False
+    deepfake_like_content_flag: bool = False
+    emotion_recognition_used: bool = False
+    biometric_categorisation_used: bool = False
+    decision_support_flag: bool = False
+    human_oversight_path_present: bool = True
+    notice_to_affected_person_present: bool = False
+    high_risk_flag: bool = False
+    governance_links: list[GovernanceLink] = Field(default_factory=list)
+
+    @field_validator("transcript")
+    @classmethod
+    def validate_transcript(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("transcript must not be empty")
+        return normalized
+
+
 class RetrievalQuery(BaseModel):
     article: str | None = None
     status: FindingStatus | None = None

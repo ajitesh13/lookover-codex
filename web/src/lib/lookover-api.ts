@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { getConfiguredApiBaseUrl } from "./lookover-config";
+import { getConfiguredApiBaseUrl, getConfiguredVoiceAuditorApiBaseUrl } from "./lookover-config";
 
 export type ShareMode = "audit_log_only" | "audit_log_plus_evaluation";
 
@@ -107,6 +107,60 @@ export type ApiShareDetail = {
   read_only: boolean;
 };
 
+export type ApiVoiceFinding = {
+  article: string;
+  status: string;
+  severity: string;
+  reason: string;
+  evidence_span: string;
+  evidence_type: string;
+  confidence: number;
+  manual_review_required: boolean;
+  linked_external_evidence_required: boolean;
+  owner: string;
+  remediation_due_at: string | null;
+};
+
+export type ApiVoiceTranscriptTurn = {
+  speaker: string;
+  text: string;
+  timestamp_seconds: number;
+};
+
+export type ApiVoiceTimelineEvent = {
+  event: string;
+  timestamp_seconds: number;
+};
+
+export type ApiVoiceRunRecord = {
+  source_id: string;
+  case_id?: string | null;
+  scenario?: string | null;
+  risk_type?: string | null;
+  expected_disposition?: string | null;
+  call_id: string;
+  disposition: string;
+  applicability: string;
+  started_at: string;
+  ai_disclosure_status: string;
+  disclosure_timestamp: number | null;
+  transcript_preview: ApiVoiceTranscriptTurn[];
+  timeline: ApiVoiceTimelineEvent[];
+  findings: ApiVoiceFinding[];
+};
+
+export type ApiVoiceRunsReport = {
+  generated_at: string;
+  dataset_dir: string;
+  limit: number;
+  seed: number;
+  mode: string;
+  audited_records: number;
+  disposition_counts: Record<string, number>;
+  article_status_counts: Record<string, number>;
+  records: ApiVoiceRunRecord[];
+};
+
 type ApiFetchResult<T> = {
   data: T | null;
   status: number | null;
@@ -128,6 +182,10 @@ function asStringArray(value: unknown): string[] {
 
 function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function asNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function normalizeTraceSummary(trace: Partial<ApiTraceSummary> | null | undefined): ApiTraceSummary {
@@ -257,6 +315,78 @@ function normalizeShareDetail(share: Partial<ApiShareDetail> | null | undefined)
   };
 }
 
+function normalizeVoiceFinding(finding: Partial<ApiVoiceFinding> | null | undefined): ApiVoiceFinding {
+  return {
+    article: String(finding?.article ?? ""),
+    status: String(finding?.status ?? ""),
+    severity: String(finding?.severity ?? ""),
+    reason: String(finding?.reason ?? ""),
+    evidence_span: String(finding?.evidence_span ?? ""),
+    evidence_type: String(finding?.evidence_type ?? ""),
+    confidence: asNumber(finding?.confidence, 0),
+    manual_review_required: Boolean(finding?.manual_review_required),
+    linked_external_evidence_required: Boolean(finding?.linked_external_evidence_required),
+    owner: String(finding?.owner ?? ""),
+    remediation_due_at: finding?.remediation_due_at ? String(finding.remediation_due_at) : null,
+  };
+}
+
+function normalizeVoiceTranscriptTurn(turn: Partial<ApiVoiceTranscriptTurn> | null | undefined): ApiVoiceTranscriptTurn {
+  return {
+    speaker: String(turn?.speaker ?? ""),
+    text: String(turn?.text ?? ""),
+    timestamp_seconds: asNumber(turn?.timestamp_seconds, 0),
+  };
+}
+
+function normalizeVoiceTimelineEvent(
+  event: Partial<ApiVoiceTimelineEvent> | null | undefined,
+): ApiVoiceTimelineEvent {
+  return {
+    event: String(event?.event ?? ""),
+    timestamp_seconds: asNumber(event?.timestamp_seconds, 0),
+  };
+}
+
+function normalizeVoiceRunRecord(record: Partial<ApiVoiceRunRecord> | null | undefined): ApiVoiceRunRecord {
+  return {
+    source_id: String(record?.source_id ?? ""),
+    case_id: record?.case_id ? String(record.case_id) : null,
+    scenario: record?.scenario ? String(record.scenario) : null,
+    risk_type: record?.risk_type ? String(record.risk_type) : null,
+    expected_disposition: record?.expected_disposition ? String(record.expected_disposition) : null,
+    call_id: String(record?.call_id ?? ""),
+    disposition: String(record?.disposition ?? ""),
+    applicability: String(record?.applicability ?? ""),
+    started_at: String(record?.started_at ?? ""),
+    ai_disclosure_status: String(record?.ai_disclosure_status ?? ""),
+    disclosure_timestamp: asNullableNumber(record?.disclosure_timestamp),
+    transcript_preview: Array.isArray(record?.transcript_preview)
+      ? record.transcript_preview.map(normalizeVoiceTranscriptTurn)
+      : [],
+    timeline: Array.isArray(record?.timeline) ? record.timeline.map(normalizeVoiceTimelineEvent) : [],
+    findings: Array.isArray(record?.findings) ? record.findings.map(normalizeVoiceFinding) : [],
+  };
+}
+
+function normalizeVoiceRunsReport(report: Partial<ApiVoiceRunsReport> | null | undefined): ApiVoiceRunsReport | null {
+  if (!report) {
+    return null;
+  }
+
+  return {
+    generated_at: String(report.generated_at ?? ""),
+    dataset_dir: String(report.dataset_dir ?? ""),
+    limit: asNumber(report.limit, 0),
+    seed: asNumber(report.seed, 0),
+    mode: String(report.mode ?? ""),
+    audited_records: asNumber(report.audited_records, 0),
+    disposition_counts: asRecord(report.disposition_counts) as Record<string, number>,
+    article_status_counts: asRecord(report.article_status_counts) as Record<string, number>,
+    records: Array.isArray(report.records) ? report.records.map(normalizeVoiceRunRecord) : [],
+  };
+}
+
 async function fetchJsonDetailed<T>(
   path: string,
   init: RequestInit = {},
@@ -340,6 +470,12 @@ export async function getSharedTrace(shareId: string, origin?: string) {
       },
       origin,
     ),
+  );
+}
+
+export async function getVoiceRunsReport(origin?: string) {
+  return normalizeVoiceRunsReport(
+    await fetchJson<ApiVoiceRunsReport>("/api/reports/latest", {}, origin ?? getConfiguredVoiceAuditorApiBaseUrl()),
   );
 }
 
