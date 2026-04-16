@@ -11,6 +11,8 @@ type Config struct {
 	APIPort              string
 	ReportsDir           string
 	ControlsDir          string
+	VoiceAuditorBaseURL  string
+	VoiceAuditorTimeout  string
 	SeedReviewerEmail    string
 	SeedReviewerPassword string
 }
@@ -21,6 +23,8 @@ func Load() (Config, error) {
 		APIPort:              getEnv("API_PORT", "8080"),
 		ReportsDir:           getEnv("REPORTS_DIR", filepath.Clean("../reports/generated")),
 		ControlsDir:          getEnv("CONTROLS_DIR", filepath.Clean("../controls")),
+		VoiceAuditorBaseURL:  getEnv("VOICE_AUDITOR_API_BASE_URL", "http://localhost:8000"),
+		VoiceAuditorTimeout:  getEnv("VOICE_AUDITOR_TIMEOUT", "8s"),
 		SeedReviewerEmail:    getEnv("SEED_REVIEWER_EMAIL", "reviewer@lookover.local"),
 		SeedReviewerPassword: getEnv("SEED_REVIEWER_PASSWORD", "demo-reviewer"),
 	}

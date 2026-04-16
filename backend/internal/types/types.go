@@ -124,3 +124,138 @@ type ShareDetail struct {
 	Trace    TraceDetail `json:"trace"`
 	ReadOnly bool        `json:"read_only"`
 }
+
+type VoiceTranscriptTurn struct {
+	Speaker          string  `json:"speaker"`
+	Text             string  `json:"text"`
+	TimestampSeconds float64 `json:"timestamp_seconds"`
+}
+
+type VoiceTimelineEvent struct {
+	Event            string  `json:"event"`
+	TimestampSeconds float64 `json:"timestamp_seconds"`
+}
+
+type VoiceFinding struct {
+	Article                        string  `json:"article"`
+	Status                         string  `json:"status"`
+	Severity                       string  `json:"severity"`
+	Reason                         string  `json:"reason"`
+	EvidenceSpan                   string  `json:"evidence_span"`
+	EvidenceType                   string  `json:"evidence_type"`
+	Confidence                     float64 `json:"confidence"`
+	ManualReviewRequired           bool    `json:"manual_review_required"`
+	LinkedExternalEvidenceRequired bool    `json:"linked_external_evidence_required"`
+	Owner                          string  `json:"owner"`
+	RemediationDueAt               string  `json:"remediation_due_at"`
+}
+
+type VoiceRunCreateRequest struct {
+	Transcript                    string `json:"transcript"`
+	CallID                        string `json:"call_id"`
+	Tenant                        string `json:"tenant"`
+	Deployer                      string `json:"deployer"`
+	Language                      string `json:"language"`
+	AgentVersion                  string `json:"agent_version"`
+	PolicyVersion                 string `json:"policy_version"`
+	RawAudioURI                   string `json:"raw_audio_uri"`
+	SyntheticAudioUsed            bool   `json:"synthetic_audio_used"`
+	SyntheticAudioMarked          bool   `json:"synthetic_audio_marked"`
+	DeepfakeLikeContentFlag       bool   `json:"deepfake_like_content_flag"`
+	EmotionRecognitionUsed        bool   `json:"emotion_recognition_used"`
+	BiometricCategorisationUsed   bool   `json:"biometric_categorisation_used"`
+	DecisionSupportFlag           bool   `json:"decision_support_flag"`
+	HumanOversightPathPresent     bool   `json:"human_oversight_path_present"`
+	NoticeToAffectedPersonPresent bool   `json:"notice_to_affected_person_present"`
+	HighRiskFlag                  bool   `json:"high_risk_flag"`
+}
+
+type VoiceRunQuery struct {
+	Query                      string
+	Status                     string
+	Disposition                string
+	Tenant                     string
+	Deployer                   string
+	Applicability              string
+	AIDisclosureStatus         string
+	Article                    string
+	Severity                   string
+	DateFrom                   *time.Time
+	DateTo                     *time.Time
+	HighRiskFlag               *bool
+	EmotionOrBiometricFeatures *bool
+	HumanHandoff               *bool
+	Page                       int
+	PageSize                   int
+}
+
+type VoiceRunSummary struct {
+	Total       int `json:"total"`
+	HardFail    int `json:"hard_fail"`
+	NeedsReview int `json:"needs_review"`
+	Pass        int `json:"pass"`
+}
+
+type VoiceRunRecord struct {
+	VoiceRunID                 string                 `json:"voice_run_id"`
+	CallID                     string                 `json:"call_id"`
+	Tenant                     string                 `json:"tenant"`
+	Deployer                   string                 `json:"deployer"`
+	Status                     string                 `json:"status"`
+	Disposition                string                 `json:"disposition"`
+	Applicability              string                 `json:"applicability"`
+	AIDisclosureStatus         string                 `json:"ai_disclosure_status"`
+	DisclosureTimestamp        *float64               `json:"disclosure_timestamp,omitempty"`
+	HighRiskFlag               bool                   `json:"high_risk_flag"`
+	EmotionOrBiometricFeatures bool                   `json:"emotion_or_biometric_features"`
+	HumanHandoff               bool                   `json:"human_handoff"`
+	AgentVersion               string                 `json:"agent_version"`
+	PolicyVersion              string                 `json:"policy_version"`
+	TranscriptText             string                 `json:"transcript_text"`
+	TranscriptTurns            []VoiceTranscriptTurn  `json:"transcript_turns"`
+	TranscriptPreview          []VoiceTranscriptTurn  `json:"transcript_preview"`
+	Timeline                   []VoiceTimelineEvent   `json:"timeline"`
+	Findings                   []VoiceFinding         `json:"findings"`
+	FindingCount               int                    `json:"finding_count"`
+	FailingFindingCount        int                    `json:"failing_finding_count"`
+	NeedsReviewFindingCount    int                    `json:"needs_review_finding_count"`
+	Error                      string                 `json:"error"`
+	AuditorReport              map[string]interface{} `json:"auditor_report,omitempty"`
+	CreatedAt                  time.Time              `json:"created_at"`
+	UpdatedAt                  time.Time              `json:"updated_at"`
+	AuditedAt                  *time.Time             `json:"audited_at,omitempty"`
+}
+
+type VoiceRunListResponse struct {
+	Items   []VoiceRunRecord `json:"items"`
+	Total   int              `json:"total"`
+	Summary VoiceRunSummary  `json:"summary"`
+}
+
+type VoiceAuditorComplianceEvidence struct {
+	AIDisclosureStatus          string   `json:"ai_disclosure_status"`
+	DisclosureTimestamp         *float64 `json:"disclosure_timestamp"`
+	EmotionRecognitionUsed      bool     `json:"emotion_recognition_used"`
+	BiometricCategorisationUsed bool     `json:"biometric_categorisation_used"`
+	HumanOversightPathPresent   bool     `json:"human_oversight_path_present"`
+	HighRiskFlag                bool     `json:"high_risk_flag"`
+}
+
+type VoiceAuditorRecord struct {
+	CallID             string                         `json:"call_id"`
+	Tenant             string                         `json:"tenant"`
+	Deployer           string                         `json:"deployer"`
+	AgentVersion       string                         `json:"agent_version"`
+	PolicyVersion      string                         `json:"policy_version"`
+	TranscriptTurns    []VoiceTranscriptTurn          `json:"transcript_turns"`
+	EventTimeline      []VoiceTimelineEvent           `json:"event_timeline"`
+	Findings           []VoiceFinding                 `json:"findings"`
+	ComplianceEvidence VoiceAuditorComplianceEvidence `json:"compliance_evidence"`
+	Applicability      string                         `json:"applicability"`
+	Disposition        string                         `json:"disposition"`
+}
+
+type VoiceAuditorResponse struct {
+	Record          VoiceAuditorRecord    `json:"record"`
+	TranscriptTurns []VoiceTranscriptTurn `json:"transcript_turns"`
+}

@@ -5,21 +5,14 @@ import json
 import random
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
-
-from fastapi.testclient import TestClient
-
-from app.main import app
+from urllib import error, request
 
 
 DEFAULT_DATASET_ID = "shadye-6/92k-real-world-call-center-scripts-english"
-DEFAULT_GOVERNANCE_LINKS = [
-    {"document_type": "provider_instructions", "reference": "hf-test/provider-instructions.pdf"},
-    {"document_type": "logging_policy", "reference": "hf-test/logging-policy.pdf"},
-]
+DEFAULT_LOOKOVER_API_BASE_URL = "http://localhost:8080"
 DISCLOSURE_TEXT = "Hello, I am an AI assistant calling on behalf of the service team."
 
 
@@ -51,6 +44,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deployer", default="voice-ops", help="Deployer value used for created audits.")
     parser.add_argument("--agent-version", default="hf-replay-v1", help="Agent version stamped on test audits.")
     parser.add_argument("--policy-version", default="policy-hf-replay", help="Policy version stamped on test audits.")
+    parser.add_argument(
+        "--api-base-url",
+        default=DEFAULT_LOOKOVER_API_BASE_URL,
+        help="Lookover public API base URL that exposes /v1/voice-runs.",
+    )
     parser.add_argument(
         "--output",
         default="data/reports/hf_dataset_audit_report.json",
@@ -307,34 +305,25 @@ def metadata_bool(node: dict[str, Any], key: str, default: bool = False) -> bool
 
 
 def build_payload(sample: TranscriptSample, index: int, args: argparse.Namespace) -> dict[str, Any]:
-    started_at = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=index)
     turns = maybe_inject_disclosure(sample.transcript_turns, args.mode)
-    ended_at = started_at + timedelta(seconds=max(60, int(turns[-1]["timestamp_seconds"]) + 10))
     audit_metadata = sample.metadata.get("audit_metadata", {})
-    source_evidence = {
-        "raw_audio_uri": sample.raw_audio_uri,
-        "synthetic_audio_used": args.mode == "inject-disclosure",
-        "synthetic_audio_marked": args.mode == "inject-disclosure",
-    }
-    source_evidence_overrides = audit_metadata.get("source_evidence")
-    if isinstance(source_evidence_overrides, dict):
-        source_evidence.update(source_evidence_overrides)
+    transcript = "\n".join(f"{turn['speaker'].title()}: {turn['text']}" for turn in turns)
 
-    governance_links = audit_metadata.get("governance_links")
-    if not isinstance(governance_links, list):
-        governance_links = DEFAULT_GOVERNANCE_LINKS
+    source_evidence = audit_metadata.get("source_evidence")
+    if not isinstance(source_evidence, dict):
+        source_evidence = {}
 
     return {
         "call_id": f"hf-{index:05d}",
         "tenant": args.tenant,
         "deployer": args.deployer,
-        "started_at": started_at.isoformat(),
-        "ended_at": ended_at.isoformat(),
+        "transcript": transcript,
         "agent_version": args.agent_version,
         "policy_version": args.policy_version,
-        "source_evidence": source_evidence,
-        "transcript_turns": turns,
-        "governance_links": governance_links,
+        "raw_audio_uri": sample.raw_audio_uri,
+        "synthetic_audio_used": metadata_bool(source_evidence, "synthetic_audio_used", args.mode == "inject-disclosure"),
+        "synthetic_audio_marked": metadata_bool(source_evidence, "synthetic_audio_marked", args.mode == "inject-disclosure"),
+        "deepfake_like_content_flag": metadata_bool(source_evidence, "deepfake_like_content_flag"),
         "emotion_recognition_used": metadata_bool(audit_metadata, "emotion_recognition_used"),
         "biometric_categorisation_used": metadata_bool(audit_metadata, "biometric_categorisation_used"),
         "decision_support_flag": metadata_bool(audit_metadata, "decision_support_flag"),
@@ -344,46 +333,75 @@ def build_payload(sample: TranscriptSample, index: int, args: argparse.Namespace
     }
 
 
+def post_voice_run(api_base_url: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any] | str]:
+    endpoint = api_base_url.rstrip("/") + "/v1/voice-runs"
+    raw_body = json.dumps(payload).encode("utf-8")
+    http_request = request.Request(
+        endpoint,
+        data=raw_body,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(http_request) as response:
+            raw_response = response.read().decode("utf-8")
+            return response.status, json.loads(raw_response)
+    except error.HTTPError as exc:
+        raw_error = exc.read().decode("utf-8")
+        try:
+            return exc.code, json.loads(raw_error)
+        except json.JSONDecodeError:
+            return exc.code, raw_error
+    except error.URLError as exc:
+        return 0, str(exc)
+
+
 def run_audits(samples: list[TranscriptSample], args: argparse.Namespace) -> dict[str, Any]:
     disposition_counts: Counter[str] = Counter()
     article_status_counts: Counter[str] = Counter()
     failures: list[dict[str, Any]] = []
     records: list[dict[str, Any]] = []
 
-    with TestClient(app) as client:
-        for index, sample in enumerate(samples):
-            payload = build_payload(sample, index, args)
-            response = client.post("/api/audits", json=payload)
-            if response.status_code != 200:
-                failures.append(
-                    {
-                        "source_id": sample.source_id,
-                        "status_code": response.status_code,
-                        "detail": response.text,
-                    }
-                )
-                continue
-
-            record = response.json()
-            disposition_counts[record["disposition"]] += 1
-            for finding in record["findings"]:
-                article_status_counts[f'{finding["article"]}:{finding["status"]}'] += 1
-
-            records.append(
+    for index, sample in enumerate(samples):
+        payload = build_payload(sample, index, args)
+        status_code, response_body = post_voice_run(args.api_base_url, payload)
+        if status_code != 201 or not isinstance(response_body, dict):
+            failures.append(
                 {
                     "source_id": sample.source_id,
-                    "case_id": sample.metadata.get("case_id"),
-                    "scenario": sample.metadata.get("scenario"),
-                    "risk_type": sample.metadata.get("risk_type"),
-                    "expected_disposition": sample.metadata.get("expected_disposition"),
-                    "call_id": record["call_id"],
-                    "disposition": record["disposition"],
-                    "applicability": record["applicability"],
-                    "finding_count": len(record["findings"]),
+                    "status_code": status_code,
+                    "detail": response_body,
                 }
             )
+            continue
+
+        record = response_body
+        disposition_counts[str(record.get("disposition", ""))] += 1
+        for finding in record.get("findings", []):
+            if isinstance(finding, dict):
+                article_status_counts[f'{finding.get("article", "")}:{finding.get("status", "")}'] += 1
+
+        records.append(
+            {
+                "source_id": sample.source_id,
+                "case_id": sample.metadata.get("case_id"),
+                "scenario": sample.metadata.get("scenario"),
+                "risk_type": sample.metadata.get("risk_type"),
+                "expected_disposition": sample.metadata.get("expected_disposition"),
+                "voice_run_id": record.get("voice_run_id"),
+                "call_id": record.get("call_id"),
+                "status": record.get("status"),
+                "disposition": record.get("disposition"),
+                "applicability": record.get("applicability"),
+                "finding_count": record.get("finding_count", len(record.get("findings", []))),
+            }
+        )
 
     return {
+        "api_base_url": args.api_base_url,
         "dataset": args.dataset_path or args.hf_dataset,
         "dataset_split": None if args.dataset_path else args.split,
         "mode": args.mode,

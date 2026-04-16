@@ -129,3 +129,35 @@ CREATE TABLE IF NOT EXISTS policy_versions (
     controls_count INTEGER NOT NULL DEFAULT 0,
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS voice_runs (
+    voice_run_id TEXT PRIMARY KEY,
+    call_id TEXT NOT NULL DEFAULT '',
+    tenant TEXT NOT NULL DEFAULT '',
+    deployer TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    disposition TEXT NOT NULL DEFAULT '',
+    applicability TEXT NOT NULL DEFAULT '',
+    ai_disclosure_status TEXT NOT NULL DEFAULT '',
+    disclosure_timestamp DOUBLE PRECISION,
+    high_risk_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    emotion_or_biometric_features BOOLEAN NOT NULL DEFAULT FALSE,
+    human_handoff BOOLEAN NOT NULL DEFAULT FALSE,
+    agent_version TEXT NOT NULL DEFAULT '',
+    policy_version TEXT NOT NULL DEFAULT '',
+    transcript_text TEXT NOT NULL DEFAULT '',
+    transcript_turns JSONB NOT NULL DEFAULT '[]'::jsonb,
+    auditor_report JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    audited_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS voice_runs_created_idx ON voice_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS voice_runs_updated_idx ON voice_runs(updated_at DESC);
+CREATE INDEX IF NOT EXISTS voice_runs_status_idx ON voice_runs(status);
+CREATE INDEX IF NOT EXISTS voice_runs_disposition_idx ON voice_runs(disposition);
+CREATE INDEX IF NOT EXISTS voice_runs_call_id_idx ON voice_runs(call_id);
+CREATE INDEX IF NOT EXISTS voice_runs_tenant_idx ON voice_runs(tenant);
+CREATE INDEX IF NOT EXISTS voice_runs_deployer_idx ON voice_runs(deployer);
