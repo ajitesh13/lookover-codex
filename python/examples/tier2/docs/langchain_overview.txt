@@ -1,0 +1,7 @@
+LangChain is an open-source framework for building applications powered by large language models (LLMs). It provides abstractions for chains, agents, memory, and retrieval to help developers compose LLM workflows quickly.
+
+LangChain supports multiple LLM providers including OpenAI, Anthropic, Google, and local models via Ollama. It offers a unified interface so you can swap providers without rewriting your application logic.
+
+The core primitives in LangChain are: Runnables (composable units), Chains (sequences of Runnables via LCEL), Agents (LLMs that decide which tools to call), Memory (conversation history), and Retrievers (interfaces for fetching relevant documents).
+
+LangChain Expression Language (LCEL) is a declarative way to compose chains using the pipe operator (|). It supports streaming, async execution, and parallel branching out of the box.

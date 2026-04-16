@@ -1,0 +1,9 @@
+Retrieval-Augmented Generation (RAG) fetches relevant documents from a knowledge base and injects them into the LLM prompt as context. This reduces hallucinations and keeps answers grounded in factual, up-to-date source material without retraining the model.
+
+A RAG pipeline has two phases: indexing and querying. During indexing, documents are split into chunks, embedded into dense vectors, and stored in a vector database. During querying, the user's question is embedded and the most similar chunks are retrieved and passed to the LLM alongside the query.
+
+Key components: a document loader (reads source files or APIs), a text splitter (chunks documents into manageable pieces), an embedding model (converts text to vectors), a vector store (indexes and searches embeddings via cosine similarity), and an LLM (synthesises an answer from retrieved context).
+
+Advanced RAG patterns include: HyDE (Hypothetical Document Embeddings, where the LLM generates a hypothetical answer to improve retrieval), re-ranking (a second model scores retrieved chunks by relevance), and multi-hop RAG (iterative retrieval where each step refines the context).
+
+RAG audit logging should capture: the query sent to the retriever, the number of chunks retrieved, each chunk's source metadata and content preview, the embedding model used, retrieval latency, and which chunks were actually referenced in the final answer.

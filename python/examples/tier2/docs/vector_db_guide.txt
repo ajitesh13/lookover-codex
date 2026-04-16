@@ -1,0 +1,7 @@
+Vector databases store embeddings — dense numerical representations of text — and support similarity search (e.g., cosine similarity or dot product). Popular options include FAISS (local), Chroma, Pinecone, and Weaviate.
+
+FAISS (Facebook AI Similarity Search) is a library for efficient similarity search over dense vectors. It runs entirely in memory, making it ideal for small-to-medium corpora in development and testing scenarios. FAISS supports both exact search (Flat index) and approximate nearest neighbor search (IVF, HNSW) for larger datasets.
+
+Choosing between vector stores depends on scale and deployment: FAISS is best for local dev and prototyping; Chroma adds persistence and a simple HTTP server; Pinecone and Weaviate are managed cloud services suited for production with millions of vectors.
+
+Embedding models map text to fixed-size float vectors (e.g., 768 or 1536 dimensions). The quality of retrieval depends heavily on the embedding model — domain-specific or fine-tuned embeddings outperform generic ones on specialized corpora.

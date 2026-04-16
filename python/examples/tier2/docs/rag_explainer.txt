@@ -1,0 +1,7 @@
+Retrieval-Augmented Generation (RAG) is a technique where relevant documents are retrieved from a knowledge base and injected into the LLM prompt as context. This reduces hallucinations and keeps answers grounded in factual source material.
+
+A RAG pipeline has two phases: indexing and querying. During indexing, documents are split into chunks, embedded into vectors, and stored in a vector database. During querying, the user's question is embedded and the most similar chunks are retrieved and passed to the LLM.
+
+Key components of a RAG system: a document loader (reads source files), a text splitter (chunks documents), an embedding model (converts text to vectors), a vector store (indexes and searches embeddings), and a generator (the LLM that synthesizes an answer from retrieved context).
+
+Common failure modes in RAG include: retrieving irrelevant chunks (embedding quality), missing context due to aggressive chunking, and the LLM ignoring retrieved context when it conflicts with training data.

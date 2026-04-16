@@ -1,20 +1,22 @@
 """
-agent_12_supervisor.py
------------------------
-Phase 1 · Agent 12 — Supervisor Multi-Agent
+agent_14_parallel.py
+---------------------
+Phase 1 · Agent 14 — Parallel Agent Execution
 
-A supervisor LLM routes tasks to specialised worker agents.
-Workers carry their own real tools — no shared module, no mocking.
+Three branches run concurrently via LangGraph's Send API.
+Each branch calls real external APIs — no shared module, no mocking.
 
-Workers & their tools:
+Branches & their tools:
   researcher : wikipedia_search + web_search
   analyst    : calculator + get_stock_price + get_weather + get_datetime
-  writer     : write_file  (persists final answer to /tmp/agent12_output.txt)
+  critic     : web_search (finds limitations / counterarguments)
+
+Aggregator synthesises all branch outputs and saves to /tmp/agent14_output.txt.
 
 Run:
-    python agent_12_supervisor.py
-    LLM_PROVIDER=vertexai python agent_12_supervisor.py
-    LLM_PROVIDER=googleai  python agent_12_supervisor.py
+    python agent_14_parallel.py
+    LLM_PROVIDER=vertexai python agent_14_parallel.py
+    LLM_PROVIDER=googleai  python agent_14_parallel.py
 """
 
 import os
@@ -24,6 +26,7 @@ import uuid
 import json
 import math
 from datetime import datetime, timezone
+from typing import Annotated, TypedDict
 from urllib import request as url_request, parse as url_parse, error as url_error
 from dotenv import load_dotenv
 
@@ -60,17 +63,6 @@ elif PROVIDER == "googleai":
 else:
     raise ValueError(f"Unknown LLM_PROVIDER='{PROVIDER}'. Use 'ollama', 'vertexai', or 'googleai'.")
 
-from lookover_codex_sdk.langgraph import LookoverLangGraphListener  # noqa: E402
-
-_lookover = LookoverLangGraphListener(
-    api_key=os.getenv("LOOKOVER_API_KEY", "lk_dev_local"),
-    agent_id="agent_12_supervisor",
-    agent_version="1.0.0",
-    model_provider=PROVIDER,
-    model_version=getattr(llm, "model", getattr(llm, "model_name", "unknown")),
-    base_url=os.getenv("LOOKOVER_BASE_URL", "http://localhost:8080"),
-)
-
 # ═══════════════════════════════════════════════════════════════
 #  TOOLS
 # ═══════════════════════════════════════════════════════════════
@@ -86,26 +78,22 @@ def wikipedia_search(query: str) -> str:
     Args:
         query: The search term, e.g. "LangChain AI framework"
     """
-    _ua = {"User-Agent": "AuditSDK-Agent/1.0 (lookover-audit-bot)"}
     try:
-        req = url_request.Request(
+        with url_request.urlopen(
             "https://en.wikipedia.org/w/api.php?action=query&list=search"
-            f"&srsearch={url_parse.quote(query)}&srlimit=1&format=json",
-            headers=_ua,
-        )
-        with url_request.urlopen(req, timeout=10) as resp:
+            f"&srsearch={url_parse.quote(query)}&srlimit=1&format=json", timeout=10
+        ) as resp:
             results = json.loads(resp.read()).get("query", {}).get("search", [])
         if not results:
             return f"No Wikipedia article found for: {query}"
         title = results[0]["title"]
-        req2 = url_request.Request(
+        with url_request.urlopen(
             f"https://en.wikipedia.org/api/rest_v1/page/summary/{url_parse.quote(title)}",
-            headers=_ua,
-        )
-        with url_request.urlopen(req2, timeout=10) as resp:
+            timeout=10,
+        ) as resp:
             page = json.loads(resp.read())
         url = page.get("content_urls", {}).get("desktop", {}).get("page", "")
-        return f"[Wikipedia: {title}]\n{page.get('extract','No extract.')}\nSource: {url}"
+        return f"[Wikipedia: {title}]\n{page.get('extract', 'No extract.')}\nSource: {url}"
     except (url_error.URLError, url_error.HTTPError) as exc:
         raise RuntimeError(f"Wikipedia API error: {exc}") from exc
 
@@ -126,7 +114,7 @@ def web_search(query: str) -> str:
             data = json.loads(resp.read())
         abstract = data.get("Abstract", "").strip()
         if abstract:
-            return f"{abstract}\nSource: {data.get('AbstractURL','')}"
+            return f"{abstract}\nSource: {data.get('AbstractURL', '')}"
         topics = [t["Text"] for t in data.get("RelatedTopics", [])[:3]
                   if isinstance(t, dict) and t.get("Text")]
         return "\n\n".join(topics) if topics else f"No instant answer found for: {query}"
@@ -143,18 +131,19 @@ def get_weather(location: str) -> str:
     """
     try:
         with url_request.urlopen(
-            f"https://geocoding-api.open-meteo.com/v1/search?name={url_parse.quote(location)}&count=1&language=en&format=json",
-            timeout=10,
+            f"https://geocoding-api.open-meteo.com/v1/search"
+            f"?name={url_parse.quote(location)}&count=1&language=en&format=json", timeout=10
         ) as resp:
             results = json.loads(resp.read()).get("results", [])
         if not results:
             return f"Could not geocode: {location}"
         r = results[0]
-        lat, lon, name, country = r["latitude"], r["longitude"], r.get("name", location), r.get("country", "")
+        lat, lon = r["latitude"], r["longitude"]
+        name, country = r.get("name", location), r.get("country", "")
         with url_request.urlopen(
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-            f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature&timezone=auto",
-            timeout=10,
+            f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,"
+            f"weather_code,apparent_temperature&timezone=auto", timeout=10
         ) as resp:
             cur = json.loads(resp.read()).get("current", {})
         WMO  = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
@@ -184,10 +173,11 @@ def get_stock_price(ticker: str) -> str:
         price  = info.get("currentPrice") or info.get("regularMarketPrice", "N/A")
         prev   = info.get("previousClose", "N/A")
         name   = info.get("longName", ticker.upper())
-        change = round(price - prev, 2) if isinstance(price, (int,float)) and isinstance(prev, (int,float)) else "N/A"
-        pct    = round((change / prev) * 100, 2) if isinstance(change, (int,float)) and prev else "N/A"
-        return (f"Stock: {name} ({ticker.upper()}) | Price: {price} {info.get('currency','USD')} | "
-                f"Change: {change} ({pct}%) | Market cap: {info.get('marketCap','N/A')} | Source: Yahoo Finance")
+        change = round(price - prev, 2) if isinstance(price, (int, float)) and isinstance(prev, (int, float)) else "N/A"
+        pct    = round((change / prev) * 100, 2) if isinstance(change, (int, float)) and prev else "N/A"
+        return (f"Stock: {name} ({ticker.upper()}) | "
+                f"Price: {price} {info.get('currency','USD')} | "
+                f"Change: {change} ({pct}%) | Source: Yahoo Finance")
     except Exception as exc:
         raise RuntimeError(f"yfinance error for {ticker}: {exc}") from exc
 
@@ -245,168 +235,195 @@ def write_file(path: str, content: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  TOOL GROUPS PER WORKER
+#  BRANCH TOOL GROUPS
 # ═══════════════════════════════════════════════════════════════
 
-RESEARCHER_TOOLS = [wikipedia_search, web_search]
-ANALYST_TOOLS    = [calculator, get_stock_price, get_weather, get_datetime]
-WRITER_TOOLS     = [write_file]
-OUTPUT_FILE      = "/tmp/agent12_output.txt"
-
-# ═══════════════════════════════════════════════════════════════
-#  STATE
-# ═══════════════════════════════════════════════════════════════
-
-from typing import Annotated, TypedDict
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage, ToolMessage
-from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-WORKERS = ["researcher", "analyst", "writer"]
+BRANCH_TOOLS = {
+    "researcher": [wikipedia_search, web_search],
+    "analyst":    [calculator, get_stock_price, get_weather, get_datetime],
+    "critic":     [web_search],
+}
 
-
-class SupervisorState(TypedDict):
-    messages:    Annotated[list[AnyMessage], add_messages]
-    next_worker: str
-    hop_log:     list[dict]
-    run_id:      str
-
-
-# ═══════════════════════════════════════════════════════════════
-#  SUPERVISOR NODE
-# ═══════════════════════════════════════════════════════════════
-
-SUPERVISOR_SYSTEM = """You are a task supervisor managing three specialist workers:
-  - researcher : searches Wikipedia and the web for factual information
-  - analyst    : runs calculations, fetches stock prices, checks weather, gets datetime
-  - writer     : writes the final polished answer to a file
-
-Decide which worker should act next, or END when the task is fully complete.
-Respond with ONLY valid JSON: {"next": "<researcher|analyst|writer|END>", "reason": "<one sentence>"}
-"""
-
-
-def supervisor_node(state: SupervisorState) -> dict:
-    response = llm.invoke([SystemMessage(content=SUPERVISOR_SYSTEM)] + state["messages"])
-    raw = response.content
-    if isinstance(raw, list):
-        raw = " ".join(p.get("text", str(p)) if isinstance(p, dict) else str(p) for p in raw)
-    try:
-        decision = json.loads(raw.strip().strip("```json").strip("```").strip())
-        next_w, reason = decision.get("next", "END"), decision.get("reason", "")
-    except Exception:
-        content = raw.lower()
-        next_w  = next((w for w in WORKERS if w in content), "END")
-        reason  = raw.strip()
-    if next_w not in WORKERS:
-        next_w = "END"
-    hop = {"from": "supervisor", "to": next_w, "reason": reason,
-           "step": len(state.get("hop_log", [])) + 1}
-    return {
-        "next_worker": next_w,
-        "hop_log":     state.get("hop_log", []) + [hop],
-        "messages":    [AIMessage(content=f"[Supervisor → {next_w}]: {reason}")],
-    }
-
-
-# ═══════════════════════════════════════════════════════════════
-#  WORKER NODES  (real ReAct loop per worker)
-# ═══════════════════════════════════════════════════════════════
-
-WORKER_SYSTEMS = {
+BRANCH_SYSTEMS = {
     "researcher": (
-        "You are a research specialist. Use wikipedia_search and web_search to find "
-        "accurate, up-to-date information. Always call at least one search tool before answering."
+        "You are a research specialist. Use wikipedia_search and web_search "
+        "to gather accurate facts about the sub-task. Always call at least one tool."
     ),
     "analyst": (
         "You are a data analyst. Use calculator for maths, get_stock_price for market data, "
         "get_weather for weather, get_datetime for current time. Never guess numbers."
     ),
-    "writer": (
-        f"You are a professional writer. Compose the final polished answer based on all "
-        f"prior research and analysis. Save it to {OUTPUT_FILE} using write_file."
+    "critic": (
+        "You are a critical analyst. Use web_search to find limitations, risks, "
+        "counterarguments, and real-world challenges related to the sub-task."
     ),
 }
 
-WORKER_TOOL_NODES = {
-    "researcher": ToolNode(RESEARCHER_TOOLS),
-    "analyst":    ToolNode(ANALYST_TOOLS),
-    "writer":     ToolNode(WRITER_TOOLS),
-}
-
-WORKER_LLMS = {
-    "researcher": llm.bind_tools(RESEARCHER_TOOLS),
-    "analyst":    llm.bind_tools(ANALYST_TOOLS),
-    "writer":     llm.bind_tools(WRITER_TOOLS),
-}
+# ═══════════════════════════════════════════════════════════════
+#  STATE
+# ═══════════════════════════════════════════════════════════════
 
 
-def make_worker_node(worker_name: str):
-    def worker_node(state: SupervisorState) -> dict:
-        sys_msg    = SystemMessage(content=WORKER_SYSTEMS[worker_name])
-        bound_llm  = WORKER_LLMS[worker_name]
-        tool_node  = WORKER_TOOL_NODES[worker_name]
-        tc_log     = []
-        messages   = list(state["messages"])
-
-        for _ in range(6):
-            response = bound_llm.invoke([sys_msg] + messages)
-            messages.append(response)
-            if not getattr(response, "tool_calls", None):
-                break
-            tool_results = tool_node.invoke({"messages": [response]})
-            for tm in tool_results.get("messages", []):
-                messages.append(tm)
-                tc_id   = getattr(tm, "tool_call_id", None)
-                matched = next((tc for tc in response.tool_calls if tc["id"] == tc_id), {})
-                tc_log.append({"tool": matched.get("name","?"), "args": matched.get("args",{}),
-                                "output": getattr(tm,"content","")[:300]})
-
-        final = getattr(messages[-1], "content", "") or ""
-        if isinstance(final, list):
-            final = " ".join(p.get("text", str(p)) if isinstance(p, dict) else str(p) for p in final)
-        hop   = {"from": worker_name, "to": "supervisor", "tool_calls": tc_log,
-                 "output": final[:120] + ("…" if len(final)>120 else ""),
-                 "step": len(state.get("hop_log",[])) + 1}
-        return {
-            "messages": [AIMessage(content=f"[{worker_name.capitalize()}]: {final}")],
-            "hop_log":  state.get("hop_log", []) + [hop],
-        }
-
-    worker_node.__name__ = f"{worker_name}_node"
-    return worker_node
+class BranchState(TypedDict):
+    original_task:  str
+    agent_name:     str
+    sub_task:       str
+    branch_output:  str
+    branch_ms:      float
+    tool_calls_log: list[dict]
 
 
-researcher_node = make_worker_node("researcher")
-analyst_node    = make_worker_node("analyst")
-writer_node     = make_worker_node("writer")
+class ParallelState(TypedDict):
+    original_task:  str
+    sub_tasks:      list[dict]
+    branch_results: Annotated[list[dict], lambda a, b: a + b]
+    final_output:   str
+    run_id:         str
+    dispatch_ms:    float
+
+
+# ═══════════════════════════════════════════════════════════════
+#  GRAPH NODES
+# ═══════════════════════════════════════════════════════════════
+
+from langgraph.types import Send
+from langgraph.graph import StateGraph, START, END
+
+
+def dispatcher_node(state: ParallelState) -> dict:
+    """LLM decomposes the task into exactly 3 parallel sub-tasks."""
+    system = (
+        "Decompose the following task into exactly 3 parallel sub-tasks:\n"
+        "  - researcher : factual background (Wikipedia / web search)\n"
+        "  - analyst    : numerical data (calculations, stocks, weather, datetime)\n"
+        "  - critic     : limitations, risks, counterarguments (web search)\n\n"
+        "Respond ONLY with a JSON array of exactly 3 objects:\n"
+        '[{"agent": "researcher", "sub_task": "..."}, '
+        '{"agent": "analyst", "sub_task": "..."}, '
+        '{"agent": "critic", "sub_task": "..."}]'
+    )
+    t0       = time.perf_counter()
+    response = llm.invoke([SystemMessage(content=system),
+                           HumanMessage(content=state["original_task"])])
+    ms       = round((time.perf_counter()-t0)*1000, 2)
+    try:
+        raw       = response.content.strip().strip("```json").strip("```").strip()
+        sub_tasks = json.loads(raw)
+        if not isinstance(sub_tasks, list) or len(sub_tasks) != 3:
+            raise ValueError
+    except Exception:
+        sub_tasks = [
+            {"agent": "researcher", "sub_task": f"Research: {state['original_task']}"},
+            {"agent": "analyst",    "sub_task": f"Analyse numerical aspects: {state['original_task']}"},
+            {"agent": "critic",     "sub_task": f"Find limitations and risks: {state['original_task']}"},
+        ]
+    return {"sub_tasks": sub_tasks, "dispatch_ms": ms}
+
+
+def branch_node(state: BranchState) -> dict:
+    """Executes one parallel branch with a real ReAct loop."""
+    agent_name = state["agent_name"]
+    tools      = BRANCH_TOOLS[agent_name]
+    bound_llm  = llm.bind_tools(tools)
+    tool_node  = ToolNode(tools)
+    tc_log     = []
+    messages   = [
+        SystemMessage(content=BRANCH_SYSTEMS[agent_name]),
+        HumanMessage(content=(
+            f"Overall task: {state['original_task']}\n\n"
+            f"Your specific sub-task: {state['sub_task']}"
+        )),
+    ]
+    t0 = time.perf_counter()
+    for _ in range(5):
+        response = bound_llm.invoke(messages)
+        messages.append(response)
+        if not getattr(response, "tool_calls", None):
+            break
+        tool_results = tool_node.invoke({"messages": [response]})
+        for tm in tool_results.get("messages", []):
+            messages.append(tm)
+            tc_id   = getattr(tm, "tool_call_id", None)
+            matched = next((tc for tc in response.tool_calls if tc["id"] == tc_id), {})
+            tc_log.append({"tool": matched.get("name","?"), "args": matched.get("args",{}),
+                           "output": getattr(tm, "content", "")[:300]})
+    return {
+        "branch_output":  getattr(messages[-1], "content", "") or "",
+        "branch_ms":      round((time.perf_counter()-t0)*1000, 2),
+        "tool_calls_log": tc_log,
+    }
+
+
+def aggregator_node(state: ParallelState) -> dict:
+    """Fan-in: synthesises all branch results and saves the final answer."""
+    branch_context = "\n\n".join(
+        f"[{r['agent_name'].upper()} — {r['sub_task'][:60]}]\n{r['branch_output']}"
+        for r in state["branch_results"]
+    )
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are a synthesis expert. Integrate the outputs from three parallel "
+            "specialist agents (researcher, analyst, critic) into a single, coherent, "
+            "well-structured final answer that addresses the original task completely."
+        )),
+        HumanMessage(content=(
+            f"Original task: {state['original_task']}\n\n"
+            f"Parallel branch outputs:\n{branch_context}"
+        )),
+    ])
+    final = response.content
+    out_path = "/tmp/agent14_output.txt"
+    try:
+        with open(out_path, "w") as f:
+            f.write(final)
+    except Exception:
+        pass
+    return {"final_output": final}
+
+
+def fan_out(state: ParallelState) -> list[Send]:
+    """Spawn one branch_node per sub-task — all run concurrently."""
+    return [
+        Send("branch_node", {
+            "original_task":  state["original_task"],
+            "agent_name":     sub["agent"],
+            "sub_task":       sub["sub_task"],
+            "branch_output":  "",
+            "branch_ms":      0.0,
+            "tool_calls_log": [],
+        })
+        for sub in state["sub_tasks"]
+    ]
+
 
 # ═══════════════════════════════════════════════════════════════
 #  BUILD GRAPH
 # ═══════════════════════════════════════════════════════════════
 
-from langgraph.graph import StateGraph, START, END as GRAPH_END
+builder = StateGraph(ParallelState)
+builder.add_node("dispatcher_node", dispatcher_node)
+builder.add_node("branch_node",     branch_node)
+builder.add_node("aggregator_node", aggregator_node)
 
-
-def route_to_worker(state: SupervisorState) -> str:
-    return state["next_worker"]
-
-
-builder = StateGraph(SupervisorState)
-builder.add_node("supervisor",  supervisor_node)
-builder.add_node("researcher",  researcher_node)
-builder.add_node("analyst",     analyst_node)
-builder.add_node("writer",      writer_node)
-
-builder.add_edge(START, "supervisor")
-builder.add_conditional_edges(
-    "supervisor", route_to_worker,
-    {"researcher":"researcher","analyst":"analyst","writer":"writer","END":GRAPH_END},
-)
-for w in WORKERS:
-    builder.add_edge(w, "supervisor")
+builder.add_edge(START, "dispatcher_node")
+builder.add_conditional_edges("dispatcher_node", fan_out, ["branch_node"])
+builder.add_edge("branch_node",     "aggregator_node")
+builder.add_edge("aggregator_node", END)
 
 graph = builder.compile()
+from lookover_codex_sdk.langgraph import LookoverLangGraphListener
+
+_lookover = LookoverLangGraphListener(
+    api_key=os.getenv("LOOKOVER_API_KEY", "lk_dev_local"),
+    agent_id="agent_14_parallel",
+    agent_version="1.0.0",
+    model_provider=PROVIDER,
+    model_version=getattr(llm, "model", getattr(llm, "model_name", "unknown")),
+    base_url=os.getenv("LOOKOVER_BASE_URL", "http://localhost:8080"),
+)
 
 # ═══════════════════════════════════════════════════════════════
 #  AGENT
@@ -418,34 +435,32 @@ def run_agent(user_input: str) -> dict:
     t0     = time.perf_counter()
     final_state = _lookover.invoke(
         graph,
-        {"messages": [HumanMessage(content=user_input)], "next_worker": "",
-         "hop_log": [], "run_id": run_id},
-        {"recursion_limit": 20},
+        {
+            "original_task":  user_input,
+            "sub_tasks":      [],
+            "branch_results": [],
+            "final_output":   "",
+            "run_id":         run_id,
+            "dispatch_ms":    0.0,
+        },
     )
-    latency_ms = round((time.perf_counter()-t0)*1000, 2)
-
-    final_answer = ""
-    for msg in reversed(final_state["messages"]):
-        content = getattr(msg, "content", "")
-        if isinstance(msg, AIMessage) and content and not content.startswith("[Supervisor"):
-            final_answer = content
-            break
-
-    hop_log   = final_state["hop_log"]
-    all_tools = [tc for h in hop_log for tc in h.get("tool_calls", [])]
+    latency_ms     = round((time.perf_counter()-t0)*1000, 2)
+    branch_results = final_state.get("branch_results", [])
+    all_tool_calls = [tc for r in branch_results for tc in r.get("tool_calls_log", [])]
     return {
-        "agent":        "agent_12_supervisor",
-        "provider":     PROVIDER,
-        "model":        getattr(llm, "model", getattr(llm, "model_name", "unknown")),
-        "run_id":       run_id,
-        "input":        user_input,
-        "output":       final_answer,
-        "output_file":  OUTPUT_FILE,
-        "hop_log":      hop_log,
-        "total_hops":   len(hop_log),
-        "workers_used": list({h["from"] for h in hop_log if h["from"] in WORKERS}),
-        "tool_calls":   all_tools,
-        "latency_ms":   latency_ms,
+        "agent":          "agent_14_parallel",
+        "provider":       PROVIDER,
+        "model":          getattr(llm, "model", getattr(llm, "model_name", "unknown")),
+        "run_id":         run_id,
+        "input":          user_input,
+        "output":         final_state["final_output"],
+        "sub_tasks":      final_state["sub_tasks"],
+        "branch_results": branch_results,
+        "num_branches":   len(branch_results),
+        "dispatch_ms":    final_state["dispatch_ms"],
+        "branch_ms_each": {r["agent_name"]: r["branch_ms"] for r in branch_results},
+        "tool_calls":     all_tool_calls,
+        "latency_ms":     latency_ms,
     }
 
 # ═══════════════════════════════════════════════════════════════
@@ -455,20 +470,22 @@ def run_agent(user_input: str) -> dict:
 if __name__ == "__main__":
     question = (
         sys.argv[1] if len(sys.argv) > 1 else
-        "Search Wikipedia for LangGraph, get the current weather in London, "
-        "calculate sqrt(98596), then write a concise summary of all findings."
+        "What is the current weather in Paris, the AAPL stock price, "
+        "and what are the main benefits and risks of AI agents in finance?"
     )
     result = run_agent(question)
-    print(f"\nProvider     : {result['provider']}  ({result['model']})")
-    print(f"Run ID       : {result['run_id']}")
-    print(f"Workers used : {result['workers_used']}")
-    print(f"Total hops   : {result['total_hops']}")
+    print(f"\nProvider      : {result['provider']}  ({result['model']})")
+    print(f"Run ID        : {result['run_id']}")
+    print(f"Dispatch time : {result['dispatch_ms']} ms")
+    print(f"Branches      : {result['num_branches']}")
+    print(f"\nSub-tasks dispatched:")
+    for st in result["sub_tasks"]:
+        print(f"  [{st['agent'].ljust(12)}] {st['sub_task'][:80]}")
+    print(f"\nBranch latencies (ran concurrently):")
+    for agent, ms in result["branch_ms_each"].items():
+        print(f"  {agent.ljust(12)} : {ms} ms")
     print(f"\nReal tool calls ({len(result['tool_calls'])}):")
     for tc in result["tool_calls"]:
         print(f"  [{tc['tool']}]  args={tc['args']}  → {str(tc['output'])[:80]}")
-    print(f"\nHop log:")
-    for hop in result["hop_log"]:
-        detail = hop.get("reason") or hop.get("output","")
-        print(f"  step {hop['step']:02d}  {hop['from'].ljust(12)} → {hop.get('to','—').ljust(12)}  |  {str(detail)[:70]}")
-    print(f"\nOutput  : {result['output'][:400]}")
-    print(f"Latency : {result['latency_ms']} ms\n")
+    print(f"\nTotal wall-clock : {result['latency_ms']} ms")
+    print(f"\nOutput:\n{result['output'][:600]}\n")

@@ -24,3 +24,6 @@ web/out/
 reports/generated/
 
 tmp/
+.venv*
+
+python/examples/artifacts/

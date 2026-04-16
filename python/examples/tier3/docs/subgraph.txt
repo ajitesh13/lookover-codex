@@ -1,0 +1,9 @@
+A LangGraph subgraph is a compiled StateGraph used as a node inside a parent graph. It enables modular, reusable agent components where complex multi-step logic is encapsulated behind a simple interface.
+
+Subgraphs have their own isolated state schema (TypedDict). The parent graph maps its state fields into the subgraph's input schema before calling it, and maps the subgraph's output schema back into the parent state after it completes. State does not automatically flow between parent and child — explicit field mapping is required.
+
+A subgraph compiles independently with sub_builder.compile(). It can have its own checkpointer, tools, and node logic. The compiled subgraph is then added to the parent graph with parent_builder.add_node("my_subgraph", compiled_subgraph).
+
+From an audit logging perspective, a subgraph invocation should be treated as a nested span. The parent graph creates a parent span; the subgraph execution creates child spans for each of its nodes. All spans share the same trace_id but have distinct span_ids and parent_span_ids for hierarchical tracing.
+
+Common use cases for subgraphs: research agents that gather and synthesise information, validation loops that check and revise LLM output, multi-modal processing pipelines (e.g., image analysis feeding into text generation), and reusable tool-calling agents embedded inside larger orchestration graphs.

@@ -1,0 +1,9 @@
+LangGraph extends LangChain with a graph-based execution model. Nodes are computation steps; edges control the flow between them. It supports cycles, branching, and human-in-the-loop interrupts — things that are difficult to express in linear chains.
+
+A LangGraph StateGraph is compiled into a runnable. Each node receives the current state as a TypedDict and returns a partial update. Reducer functions (like add_messages) merge updates back into the shared state.
+
+LangGraph supports checkpointing via a pluggable interface. MemorySaver keeps state in process memory; SqliteSaver persists to a local SQLite file; PostgresSaver targets production databases. Checkpoints enable pause-and-resume, time-travel debugging, and multi-turn conversations that survive restarts.
+
+Subgraphs in LangGraph allow you to compile one StateGraph and embed it as a single node inside a parent graph. This enables modular, reusable agent components with isolated state schemas. The parent sees the subgraph as a black box — it maps inputs in and reads outputs out.
+
+The interrupt() primitive suspends graph execution mid-node and surfaces a payload to a human reviewer. When the graph is resumed with a Command(resume=...), execution continues from exactly where it paused. This is the foundation for human-in-the-loop approval workflows.

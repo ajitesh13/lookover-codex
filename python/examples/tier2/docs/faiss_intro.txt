@@ -1,0 +1,7 @@
+FAISS (Facebook AI Similarity Search) is a library for efficient similarity search and clustering of dense vectors. Developed by Meta AI Research, it is written in C++ with Python bindings and supports both CPU and GPU execution.
+
+FAISS provides multiple index types with different speed/accuracy trade-offs. IndexFlatL2 does exact brute-force search and is the most accurate but slowest for large datasets. IndexIVFFlat partitions vectors into clusters (inverted file index) for faster approximate search. IndexHNSWFlat uses hierarchical navigable small world graphs for very fast approximate search.
+
+For RAG applications, IndexFlatL2 or IndexFlatIP (inner product / cosine similarity) are recommended for corpora under 100,000 chunks where accuracy is critical. For larger corpora, IVF or HNSW indexes should be used with appropriate nprobe settings to balance recall and latency.
+
+FAISS indexes can be serialized to disk with faiss.write_index() and loaded back with faiss.read_index(), enabling persistence across sessions without a full vector database server.

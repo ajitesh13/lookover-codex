@@ -1,0 +1,9 @@
+AI audit logging captures every observable event in an agent's lifecycle: prompts, completions, token usage, latency, tool invocations with their inputs and outputs, retrieved document chunks, node transitions in agent graphs, and human decisions in approval workflows.
+
+For compliance frameworks like GDPR and SOC 2 Type II, audit logs must be tamper-proof and append-only. A hash chain — where each record's hash includes the previous record's hash — provides cryptographic proof that logs have not been altered retroactively.
+
+Key fields in an AI audit log record: event_id, trace_id, span_id, agent_id, tenant_id, timestamp, event_type (TOOL_CALL, MODEL_INFERENCE, DATA_ACCESS, DECISION, HUMAN_HANDOFF), payload, payload_hash, chain_hash, and signed_chain_hash.
+
+Audit logging for subgraph-based agents requires capturing both parent and child node transitions, correlating them via a shared trace_id. Each subgraph invocation should generate its own span nested under the parent span, forming a hierarchical audit trail.
+
+Human-in-the-loop events require special audit fields: the interrupt payload (what the agent wanted to do), the human decision (approve or reject), the decision timestamp, the approver identity, and the final action taken.

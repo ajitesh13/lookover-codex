@@ -17,4 +17,4 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["prerun*"]
+include = ["prerun*", "lookover_codex_sdk*"]
