@@ -1,4 +1,4 @@
-import styles from "./primitives.module.css";
+import { cn } from "@/lib/lookover-format";
 
 export function SectionCard({
   children,
@@ -7,5 +7,5 @@ export function SectionCard({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <section className={`${styles.card} ${className ?? ""}`.trim()}>{children}</section>;
+  return <section className={cn("lookover-card", className)}>{children}</section>;
 }

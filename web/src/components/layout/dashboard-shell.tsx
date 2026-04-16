@@ -1,4 +1,3 @@
-import styles from "./dashboard-shell.module.css";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 
@@ -10,11 +9,11 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className={styles.shell}>
+    <div className="min-h-screen bg-lookover-bg">
       <Sidebar reviewer={reviewer} />
-      <div className={styles.body}>
+      <div className="min-h-screen pl-[220px]">
         <Topbar />
-        <main className={styles.content}>{children}</main>
+        <main className="px-6 py-7 lg:px-12 lg:py-10">{children}</main>
       </div>
     </div>
   );

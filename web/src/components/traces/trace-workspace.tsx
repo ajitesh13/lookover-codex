@@ -1,23 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ApiSpan, ApiTraceDetail, ShareMode } from "@/lib/lookover-api";
 import {
-  cn,
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  GitBranch,
+  ShieldAlert,
+  Sparkles,
+  Wrench,
+  X,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import type { ApiSpan, ApiTraceDetail, ShareMode } from "@/lib/lookover-api";
+import {
   countFindingsByCategory,
-  deriveRootIntent,
+  deriveTraceOutcome,
   formatCompactDate,
   formatDuration,
-  getRiskLabel,
   getToneFromStatus,
   safeText,
   titleCase,
 } from "@/lib/lookover-format";
-import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
-import shared from "@/components/ui/primitives.module.css";
-import styles from "./traces.module.css";
+import { cn } from "@/lib/lookover-format";
 
 type TraceTreeNode = {
   span: ApiSpan;
@@ -56,15 +64,46 @@ function findingCountsForSpan(detail: ApiTraceDetail, spanId: string) {
     );
 }
 
+function flattenTree(nodes: TraceTreeNode[], depth = 0): Array<{ node: TraceTreeNode; depth: number }> {
+  return nodes.flatMap((node) => [{ node, depth }, ...flattenTree(node.children, depth + 1)]);
+}
+
+function getSpanIcon(span: ApiSpan) {
+  const normalized = `${span.event_type} ${span.name}`.toLowerCase();
+  if (normalized.includes("decision") || normalized.includes("supervisor")) {
+    return { Icon: GitBranch, className: "bg-rose-50 text-rose-500" };
+  }
+  return { Icon: Wrench, className: "bg-sky-50 text-sky-600" };
+}
+
+function extractRoutingDecision(span: ApiSpan) {
+  const payload = span.payload ?? {};
+  return (
+    safeText(
+      payload.route_decision ??
+        payload.routing_decision ??
+        payload.llm_output ??
+        payload.message ??
+        payload.output,
+    ) || safeText(payload)
+  );
+}
+
+function extractStateChanges(span: ApiSpan) {
+  const payload = span.payload ?? {};
+  if (payload.state_changes) return safeText(payload.state_changes);
+  if (payload.next_worker) return safeText({ next_worker: payload.next_worker });
+  return safeText(payload);
+}
+
 function ShareActions({ traceId }: { traceId: string }) {
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState("");
   const [loadingMode, setLoadingMode] = useState<ShareMode | null>(null);
 
   async function createShare(mode: ShareMode) {
     setLoadingMode(mode);
     setStatus("");
-
     try {
       const response = await fetch(`/api/traces/${traceId}/share`, {
         method: "POST",
@@ -77,7 +116,7 @@ function ShareActions({ traceId }: { traceId: string }) {
         return;
       }
       await navigator.clipboard.writeText(payload.url);
-      setStatus(`Share link copied for ${mode === "audit_log_only" ? "trace only" : "trace + compliance"}.`);
+      setStatus(mode === "audit_log_only" ? "Copied trace-only link." : "Copied compliance share link.");
       setOpen(false);
     } catch {
       setStatus("Share link could not be created.");
@@ -87,95 +126,137 @@ function ShareActions({ traceId }: { traceId: string }) {
   }
 
   return (
-    <div className={styles.shareWrap}>
+    <div className="relative">
       <button
         type="button"
-        className={`${shared.button} ${shared.buttonPrimary}`}
+        className="inline-flex h-12 items-center gap-2 rounded-2xl border border-lookover-border bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
         onClick={() => setOpen((value) => !value)}
       >
-        Share run
+        <Sparkles className="h-4 w-4" />
+        Share
       </button>
       {open ? (
-        <div className={styles.shareMenu}>
+        <div className="absolute right-0 top-14 z-20 w-[270px] rounded-[20px] border border-lookover-border bg-white p-2 shadow-lookover-card">
           <button
             type="button"
-            className={styles.shareOption}
+            className="flex w-full flex-col items-start rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
             onClick={() => createShare("audit_log_plus_evaluation")}
             disabled={loadingMode !== null}
           >
-            <strong>With compliance</strong>
-            <span className={styles.shareStatus}>Includes violations, gaps, and covered controls.</span>
+            <span className="text-sm font-semibold text-slate-900">With compliance</span>
+            <span className="mt-1 text-[13px] leading-5 text-lookover-text-muted">
+              Includes violations, gaps, and covered findings.
+            </span>
           </button>
           <button
             type="button"
-            className={styles.shareOption}
+            className="flex w-full flex-col items-start rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
             onClick={() => createShare("audit_log_only")}
             disabled={loadingMode !== null}
           >
-            <strong>Without compliance</strong>
-            <span className={styles.shareStatus}>Only the trace tree, span detail, and raw evidence.</span>
+            <span className="text-sm font-semibold text-slate-900">Without compliance</span>
+            <span className="mt-1 text-[13px] leading-5 text-lookover-text-muted">
+              Only the trace tree and node detail.
+            </span>
           </button>
         </div>
       ) : null}
-      {status ? <div className={styles.shareStatus}>{status}</div> : null}
+      {status ? <div className="mt-2 text-[13px] text-lookover-text-muted">{status}</div> : null}
     </div>
   );
 }
 
-function TreeNode({
-  node,
-  selectedSpanId,
-  onSelect,
-  detail,
-  showCompliance,
+function SummaryCounter({
+  label,
+  count,
+  tone,
+  onClick,
 }: {
-  node: TraceTreeNode;
-  selectedSpanId: string;
-  onSelect: (spanId: string) => void;
-  detail: ApiTraceDetail;
-  showCompliance: boolean;
+  label: string;
+  count: number;
+  tone: "danger" | "warning" | "success";
+  onClick: () => void;
 }) {
-  const counts = findingCountsForSpan(detail, node.span.span_id);
-  const selected = selectedSpanId === node.span.span_id;
+  const toneClass =
+    tone === "danger"
+      ? "border-rose-200 bg-rose-50/50 text-rose-400"
+      : tone === "warning"
+        ? "border-amber-300 bg-amber-50/60 text-amber-600"
+        : "border-emerald-300 bg-emerald-50/60 text-emerald-600";
+  const Icon = tone === "danger" ? AlertTriangle : tone === "warning" ? ShieldAlert : CheckCircle2;
 
   return (
-    <div className={styles.treeRoot}>
-      <div className={cn(styles.treeNode, selected && styles.treeNodeSelected)}>
-        <button type="button" className={styles.treeButton} onClick={() => onSelect(node.span.span_id)}>
-          <div className={styles.treeNodeLeft}>
-            <span className={styles.treeIcon}>{node.span.event_type.slice(0, 2).toUpperCase()}</span>
-            <span className={styles.treeText}>
-              <span className={styles.treeName}>{node.span.name}</span>
-              <span className={styles.treeMeta}>
-                {titleCase(node.span.event_type)} · {formatDuration(node.span.start_time, node.span.end_time)}
-              </span>
-            </span>
-          </div>
-          <span className={styles.treeBadges}>
-            <Badge tone={getToneFromStatus(node.span.status) === "danger" ? "danger" : getToneFromStatus(node.span.status) === "warning" ? "warning" : "neutral"}>
-              {node.span.status}
-            </Badge>
-            {showCompliance && counts.violations > 0 ? <Badge tone="danger">{counts.violations} violations</Badge> : null}
-            {showCompliance && counts.gaps > 0 ? <Badge tone="warning">{counts.gaps} gaps</Badge> : null}
-            {showCompliance && counts.covered > 0 ? <Badge tone="success">{counts.covered} covered</Badge> : null}
-          </span>
-        </button>
+    <button
+      type="button"
+      className={cn(
+        "flex h-[78px] items-center justify-between rounded-[22px] border px-6 text-left transition hover:bg-white",
+        toneClass,
+      )}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-4">
+        <span className="inline-flex h-8 w-1 rounded-full bg-current/90" />
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-current/20 bg-white/60">
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="text-[16px] font-medium">{label}</span>
       </div>
-      {node.children.length > 0 ? (
-        <div className={styles.treeChildren}>
-          {node.children.map((child) => (
-            <TreeNode
-              key={child.span.span_id}
-              node={child}
-              selectedSpanId={selectedSpanId}
-              onSelect={onSelect}
-              detail={detail}
-              showCompliance={showCompliance}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+      <div className="flex items-center gap-4">
+        <span className="rounded-xl border border-current/20 bg-white/70 px-3 py-1.5 text-[14px] font-medium">
+          {count}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-60" />
+      </div>
+    </button>
+  );
+}
+
+function FindingPanel({
+  title,
+  tone,
+  items,
+}: {
+  title: string;
+  tone: "danger" | "warning" | "success";
+  items: ApiTraceDetail["findings"];
+}) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-rose-200 bg-rose-50/40"
+      : tone === "warning"
+        ? "border-amber-300 bg-amber-50/40"
+        : "border-emerald-300 bg-emerald-50/40";
+
+  return (
+    <section className={cn("rounded-[22px] border p-4", toneClasses)}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-[16px] font-semibold text-slate-900">{title}</h3>
+        <span className="rounded-xl border border-white/60 bg-white/80 px-2.5 py-1 text-[13px] font-medium text-slate-500">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-4 space-y-3">
+        {items.length === 0 ? (
+          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-4 text-[14px] text-lookover-text-muted">
+            No findings in this section for the selected trace.
+          </div>
+        ) : (
+          items.slice(0, 3).map((finding) => (
+            <div key={finding.id} className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
+                <span>{finding.framework}</span>
+                <span>{finding.control_id}</span>
+                {finding.span_id ? <span>span:{finding.span_id.slice(0, 8)}</span> : null}
+              </div>
+              <div className="mt-2 text-[15px] font-medium leading-6 text-slate-900">{finding.title}</div>
+              <div className="mt-2 text-[13px] leading-6 text-lookover-text-muted">
+                {finding.reasoning || finding.remediation}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -189,206 +270,261 @@ export function TraceWorkspace({
   shareMode?: ShareMode;
 }) {
   const tree = useMemo(() => buildTree(detail.spans), [detail.spans]);
-  const [selectedSpanId, setSelectedSpanId] = useState(detail.spans[0]?.span_id ?? "");
-  const [showFindings, setShowFindings] = useState(true);
-  const selectedSpan = detail.spans.find((span) => span.span_id === selectedSpanId) ?? detail.spans[0];
-  const rootIntent = deriveRootIntent(detail.trace, detail.spans);
-  const counts = countFindingsByCategory(detail.findings);
+  const flattened = useMemo(() => flattenTree(tree), [tree]);
+  const [selectedSpanId, setSelectedSpanId] = useState("");
+  const [showFindings, setShowFindings] = useState(shareMode !== "audit_log_only");
+  const selectedSpan = detail.spans.find((item) => item.span_id === selectedSpanId) ?? null;
+  const selectedEvidence = detail.evidence.filter((item) => item.span_id === selectedSpan?.span_id);
+  const grouped = countFindingsByCategory(detail.findings);
   const showCompliance = shareMode !== "audit_log_only";
+  const outcome = deriveTraceOutcome(detail.trace);
 
-  const evidenceItems = detail.evidence.filter((item) => item.span_id === selectedSpan?.span_id);
-  const spanFindings = detail.findings.filter((finding) => finding.span_id === selectedSpan?.span_id);
+  const groupedFindings = {
+    violations: detail.findings.filter((item) => getToneFromStatus(item.status) === "danger"),
+    gaps: detail.findings.filter((item) => getToneFromStatus(item.status) === "warning"),
+    covered: detail.findings.filter((item) => getToneFromStatus(item.status) === "neutral"),
+  };
+
+  async function copyTraceId() {
+    await navigator.clipboard.writeText(detail.trace.trace_id);
+  }
 
   return (
-    <div className={shared.section}>
-      <PageHeader
-        eyebrow={readOnly ? "Shared run" : "Trace workspace"}
-        title={rootIntent}
-        subtitle="Inspect the trace tree, select any span for audit evidence, and review grouped findings with simple, non-technical language."
-        actions={
-          readOnly ? (
-            <Badge tone="neutral">Read only</Badge>
-          ) : (
-            <ShareActions traceId={detail.trace.trace_id} />
-          )
-        }
-      />
-
+    <div className="space-y-8">
       {readOnly ? (
-        <div className={styles.readonlyBanner}>
-          Shared review link loaded. Interactive inspection is allowed, but edits and approvals stay disabled.
+        <div className="lookover-card-tight px-6 py-4 text-[14px] text-lookover-text-muted">
+          Shared review mode is active. Navigation and trace inspection stay available, while editing actions remain disabled.
         </div>
       ) : null}
 
-      <SectionCard className={styles.summaryCard}>
-        <div className={styles.summaryTop}>
-          <div className={styles.summaryTitle}>
-            <h2>{detail.trace.trace_id}</h2>
-            <p>{detail.trace.agent_id} · {detail.trace.framework || "runtime trace"} · {detail.trace.model_provider || "local reviewer flow"}</p>
-          </div>
-          <div className={styles.summaryMeta}>
-            <Badge tone={getToneFromStatus(detail.trace.status) === "danger" ? "danger" : getToneFromStatus(detail.trace.status) === "warning" ? "warning" : "neutral"}>
-              {detail.trace.status}
-            </Badge>
-            <Badge tone={detail.trace.overall_risk_score >= 80 ? "danger" : detail.trace.overall_risk_score >= 50 ? "warning" : "neutral"}>
-              {getRiskLabel(detail.trace.overall_risk_score)} risk
-            </Badge>
-          </div>
-        </div>
-        <div className={styles.summaryStats}>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Agent</div>
-            <div className={styles.statValue}>{detail.trace.agent_id || "—"}</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Started</div>
-            <div className={styles.statValue}>{formatCompactDate(detail.trace.created_at)}</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Duration</div>
-            <div className={styles.statValue}>{formatDuration(detail.trace.created_at, detail.trace.updated_at)}</div>
-          </div>
-          <div className={styles.stat}>
-            <div className={styles.statLabel}>Spans</div>
-            <div className={styles.statValue}>{detail.spans.length}</div>
-          </div>
-        </div>
-      </SectionCard>
-
-      {showCompliance ? (
-        <SectionCard className={styles.findingGroup}>
-          <div className={styles.findingGroupHeader}>
-            <div className={styles.panelTitle}>
-              <h3>Grouped findings</h3>
-              <p>Violations, gaps, and covered controls stay tied to the observed trace evidence.</p>
-            </div>
-            <button
-              type="button"
-              className={`${shared.button} ${shared.buttonSecondary}`}
-              onClick={() => setShowFindings((value) => !value)}
-            >
-              {showFindings ? "Collapse" : "Expand"}
-            </button>
-          </div>
-          {showFindings ? (
-            <div className={styles.findingsGrid}>
-              {[
-                { title: "Violations", items: detail.findings.filter((item) => getToneFromStatus(item.status) === "danger"), tone: "danger" as const, count: counts.violations },
-                { title: "Gaps", items: detail.findings.filter((item) => getToneFromStatus(item.status) === "warning"), tone: "warning" as const, count: counts.gaps },
-                { title: "Covered", items: detail.findings.filter((item) => getToneFromStatus(item.status) === "neutral"), tone: "success" as const, count: counts.covered },
-              ].map((group) => (
-                <div key={group.title} className={`${shared.card} ${styles.findingGroup}`}>
-                  <div className={styles.findingGroupHeader}>
-                    <h3>{group.title}</h3>
-                    <Badge tone={group.tone}>{group.count}</Badge>
-                  </div>
-                  <div className={styles.findingList}>
-                    {group.items.length === 0 ? (
-                      <div className={styles.findingItem}>
-                        <div className={styles.findingBody}>No items in this group for the current trace.</div>
-                      </div>
-                    ) : (
-                      group.items.map((finding) => (
-                        <div key={finding.id} className={styles.findingItem}>
-                          <div className={styles.findingTitle}>{finding.title}</div>
-                          <div className={styles.findingMeta}>
-                            {finding.framework} · {finding.control_id} · {finding.span_id || "trace level"}
-                          </div>
-                          <div className={styles.findingEvidence}>
-                            {finding.citation ? <div><strong>Source citation:</strong> {finding.citation}</div> : null}
-                            {Object.keys(finding.observed_evidence ?? {}).length ? (
-                              <div><strong>Observed evidence:</strong> {safeText(finding.observed_evidence)}</div>
-                            ) : null}
-                            {finding.reasoning ? <div><strong>Compliance reasoning:</strong> {finding.reasoning}</div> : null}
-                            {finding.residual_risk ? <div><strong>Residual risk:</strong> {finding.residual_risk}</div> : null}
-                            {finding.remediation ? <div><strong>Remediation:</strong> {finding.remediation}</div> : null}
-                          </div>
-                          <div className={styles.findingBody}>{finding.reasoning || finding.remediation}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </SectionCard>
-      ) : null}
-
-      <div className={styles.workspace}>
-        <SectionCard className={styles.treePanel}>
-          <div className={styles.panelHeader}>
-            <div className={styles.panelTitle}>
-              <h3>Trace tree</h3>
-              <p>Walk each span in order and inspect its evidence one decision at a time.</p>
-            </div>
-          </div>
-          {tree.map((node) => (
-            <TreeNode
-              key={node.span.span_id}
-              node={node}
-              selectedSpanId={selectedSpanId}
-              onSelect={setSelectedSpanId}
-              detail={detail}
-              showCompliance={showCompliance}
-            />
-          ))}
-        </SectionCard>
-
-        <SectionCard className={styles.detailPanel}>
-          <div className={styles.panelHeader}>
-            <div className={styles.panelTitle}>
-              <h3>{selectedSpan?.name || "Span detail"}</h3>
-              <p>{selectedSpan ? `${titleCase(selectedSpan.event_type)} · ${formatDuration(selectedSpan.start_time, selectedSpan.end_time)}` : "Select a span to inspect evidence."}</p>
-            </div>
-            {selectedSpan ? <Badge tone={getToneFromStatus(selectedSpan.status) === "danger" ? "danger" : getToneFromStatus(selectedSpan.status) === "warning" ? "warning" : "neutral"}>{selectedSpan.status}</Badge> : null}
-          </div>
-
-          {selectedSpan ? (
-            <div className={styles.detailBody}>
-              <div className={styles.detailSection}>
-                <h4>Observed payload</h4>
-                <div className={styles.detailList}>
-                  <code>{JSON.stringify(selectedSpan.payload, null, 2)}</code>
-                </div>
+      <section className="lookover-card px-8 py-7">
+        <div className="flex flex-col gap-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-4 text-[15px] text-lookover-text-muted">
+                <Link href="/traces" className="inline-flex items-center gap-2 transition hover:text-slate-900">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Traces</span>
+                </Link>
+                <span>/</span>
+                <span className="font-mono text-[18px] text-slate-900">{detail.trace.trace_id}</span>
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-lookover-border text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                  onClick={copyTraceId}
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+                <Badge tone="success" className="text-[13px] capitalize">
+                  {detail.trace.status.toLowerCase()}
+                </Badge>
+                <Badge tone={outcome === "In Progress" ? "warning" : "danger"} className="text-[13px]">
+                  {outcome.toLowerCase()}
+                </Badge>
               </div>
 
-              <div className={styles.detailSection}>
-                <h4>Raw evidence</h4>
-                <div className={styles.detailList}>
-                  {evidenceItems.length === 0 ? (
-                    <div className={shared.tableMeta}>No evidence rows were attached to this span.</div>
-                  ) : (
-                    evidenceItems.map((item) => (
-                      <code key={item.id}>
-                        {item.field_name}: {safeText(item.value)}
-                      </code>
-                    ))
-                  )}
+              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-10">
+                <div>
+                  <div className="text-[14px] text-lookover-text-muted">Agent</div>
+                  <div className="mt-2 text-[18px] font-medium text-slate-900">{detail.trace.agent_id}</div>
+                </div>
+                <div>
+                  <div className="text-[14px] text-lookover-text-muted">Started</div>
+                  <div className="mt-2 text-[18px] font-medium text-slate-900">{formatCompactDate(detail.trace.created_at)}</div>
+                </div>
+                <div>
+                  <div className="text-[14px] text-lookover-text-muted">Duration</div>
+                  <div className="mt-2 text-[18px] font-medium text-slate-900">
+                    {formatDuration(detail.trace.created_at, detail.trace.updated_at)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[14px] text-lookover-text-muted">Spans</div>
+                  <div className="mt-2 text-[18px] font-medium text-slate-900">{detail.spans.length}</div>
                 </div>
               </div>
+            </div>
 
-              {showCompliance ? (
-                <div className={styles.detailSection}>
-                  <h4>Findings tied to this span</h4>
-                  <div className={styles.detailList}>
-                    {spanFindings.length === 0 ? (
-                      <div className={shared.tableMeta}>No findings are attached to this span.</div>
-                    ) : (
-                      spanFindings.map((finding) => (
-                        <code key={finding.id} className={cn(shared.mono)}>
-                          [{titleCase(finding.framework)} / {finding.control_id}] {finding.title} ({titleCase(finding.status)})
-                        </code>
-                      ))
-                    )}
-                  </div>
+            <div className="flex flex-wrap items-center gap-3 self-start">
+              {!readOnly ? <ShareActions traceId={detail.trace.trace_id} /> : null}
+              <button
+                type="button"
+                className="inline-flex h-12 items-center gap-2 rounded-2xl border border-lookover-border bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+              >
+                <Sparkles className="h-4 w-4" />
+                AIBOM
+              </button>
+            </div>
+          </div>
+
+          {showCompliance ? (
+            <>
+              <div className="grid gap-4 xl:grid-cols-3">
+                <SummaryCounter label="Violations" count={grouped.violations} tone="danger" onClick={() => setShowFindings((value) => !value)} />
+                <SummaryCounter label="Gaps" count={grouped.gaps} tone="warning" onClick={() => setShowFindings((value) => !value)} />
+                <SummaryCounter label="Covered" count={grouped.covered} tone="success" onClick={() => setShowFindings((value) => !value)} />
+              </div>
+
+              {showFindings ? (
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <FindingPanel title="Violations" tone="danger" items={groupedFindings.violations} />
+                  <FindingPanel title="Gaps" tone="warning" items={groupedFindings.gaps} />
+                  <FindingPanel title="Covered" tone="success" items={groupedFindings.covered} />
                 </div>
               ) : null}
+            </>
+          ) : null}
+        </div>
+      </section>
+
+      <div className={cn("grid gap-5", selectedSpan ? "xl:grid-cols-[1.55fr,0.9fr]" : "grid-cols-1")}>
+        <section className="lookover-card overflow-hidden">
+          <div className="px-6 py-6">
+            {flattened.map(({ node, depth }) => {
+              const counts = findingCountsForSpan(detail, node.span.span_id);
+              const isSelected = selectedSpanId === node.span.span_id;
+              const { Icon, className } = getSpanIcon(node.span);
+              const totalFlags = counts.violations + counts.gaps + counts.covered;
+
+              return (
+                <div
+                  key={node.span.span_id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-[22px] px-4 py-3 transition",
+                    isSelected ? "bg-black text-white shadow-sm" : "hover:bg-slate-50",
+                  )}
+                  style={{ paddingLeft: `${depth * 28 + 16}px` }}
+                >
+                  <span className={cn("h-2.5 w-2.5 rounded-full", isSelected ? "bg-white/60" : "bg-slate-300")} />
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-4 text-left"
+                    onClick={() => {
+                      setSelectedSpanId(node.span.span_id);
+                      setShowFindings(false);
+                    }}
+                  >
+                    <span className={cn("inline-flex h-12 w-12 items-center justify-center rounded-2xl", className)}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="truncate text-[18px] font-medium tracking-[-0.02em]">
+                      {node.span.name || titleCase(node.span.event_type)}
+                    </span>
+                  </button>
+                  {showCompliance ? (
+                    <div className="ml-auto flex items-center gap-3">
+                      {counts.violations > 0 ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-w-[34px] items-center justify-center rounded-full border px-2 py-1 text-[14px] font-medium",
+                            isSelected
+                              ? "border-rose-300/40 bg-rose-400/10 text-rose-200"
+                              : "border-rose-200 bg-rose-50 text-rose-500",
+                          )}
+                        >
+                          {counts.violations}
+                        </span>
+                      ) : null}
+                      {totalFlags > 0 ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-w-[40px] items-center justify-center rounded-full border px-2 py-1 text-[14px] font-medium",
+                            isSelected
+                              ? "border-amber-300/40 bg-amber-400/10 text-amber-200"
+                              : "border-amber-300 bg-amber-50 text-amber-600",
+                          )}
+                        >
+                          {totalFlags}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {selectedSpan ? (
+          <section className="lookover-card px-7 py-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge tone="danger" className="text-[14px]">
+                  {titleCase(selectedSpan.event_type)} / Routing
+                </Badge>
+                <span className="rounded-xl bg-indigo-50 px-3 py-1.5 font-mono text-[15px] text-indigo-900">
+                  {selectedSpan.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="text-slate-400 transition hover:text-slate-700"
+                onClick={() => setSelectedSpanId("")}
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-          ) : (
-            <div className={shared.emptyBody}>Select a span from the tree to open the detail panel.</div>
-          )}
-        </SectionCard>
+
+            <div className="mt-8 grid gap-8 sm:grid-cols-2">
+              <div>
+                <div className="lookover-label">Start time</div>
+                <div className="mt-3 text-[18px] font-medium tracking-[-0.02em] text-slate-900">
+                  {formatCompactDate(selectedSpan.start_time)}
+                </div>
+              </div>
+              <div>
+                <div className="lookover-label">Duration</div>
+                <div className="mt-3 text-[18px] font-medium tracking-[-0.02em] text-slate-900">
+                  {formatDuration(selectedSpan.start_time, selectedSpan.end_time)}
+                </div>
+              </div>
+              <div>
+                <div className="lookover-label">Outcome</div>
+                <div className="mt-3">
+                  <Badge tone={getToneFromStatus(selectedSpan.status) === "danger" ? "danger" : "success"} className="text-[13px]">
+                    {selectedSpan.status.toLowerCase()}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-lookover-border pt-7">
+              <div className="lookover-label">Routing decision (LLM output)</div>
+              <div className="mt-4 rounded-[20px] bg-indigo-50 px-5 py-4 text-[15px] leading-8 text-slate-600">
+                {extractRoutingDecision(selectedSpan)}
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-lookover-border pt-7">
+              <div className="lookover-label">Agent state changes from this node</div>
+              <pre className="mt-4 overflow-x-auto rounded-[20px] bg-indigo-50 px-5 py-4 font-mono text-[14px] leading-8 text-slate-600">
+                {extractStateChanges(selectedSpan)}
+              </pre>
+            </div>
+
+            <div className="mt-8 border-t border-lookover-border pt-7">
+              <div className="lookover-label">Raw evidence</div>
+              {selectedEvidence.length === 0 ? (
+                <div className="mt-4 rounded-[20px] border border-dashed border-lookover-border px-5 py-4 text-[14px] text-lookover-text-muted">
+                  No evidence rows were attached to this node.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {selectedEvidence.map((item) => (
+                    <div key={item.id} className="rounded-[20px] border border-lookover-border bg-slate-50 px-5 py-4">
+                      <div className="text-[13px] font-medium uppercase tracking-[0.14em] text-lookover-text-muted">
+                        {item.source} · {item.field_name}
+                      </div>
+                      <pre className="mt-3 overflow-x-auto font-mono text-[13px] leading-7 text-slate-600">
+                        {safeText(item.value)}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
