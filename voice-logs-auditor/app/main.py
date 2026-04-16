@@ -13,6 +13,13 @@ ensure_runtime_dirs()
 
 
 app = FastAPI(title="Voice Logs Auditor", version="0.1.0")
+
+
+@app.get("/healthz")
+def healthcheck() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.include_router(api_router)
 app.include_router(html_router)

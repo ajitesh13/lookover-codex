@@ -53,9 +53,14 @@ func main() {
 		log.Fatalf("seed demo data: %v", err)
 	}
 
+	voiceAuditorTimeout, err := time.ParseDuration(cfg.VoiceAuditorTimeout)
+	if err != nil {
+		log.Fatalf("parse voice auditor timeout: %v", err)
+	}
+
 	server := &http.Server{
 		Addr:              ":" + cfg.APIPort,
-		Handler:           api.New(db, engine, cfg.ReportsDir),
+		Handler:           api.New(db, engine, cfg.ReportsDir, cfg.VoiceAuditorBaseURL, voiceAuditorTimeout),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

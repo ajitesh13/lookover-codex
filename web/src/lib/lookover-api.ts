@@ -107,6 +107,93 @@ export type ApiShareDetail = {
   read_only: boolean;
 };
 
+export type ApiVoiceFinding = {
+  article: string;
+  status: string;
+  severity: string;
+  reason: string;
+  evidence_span: string;
+  evidence_type: string;
+  confidence: number;
+  manual_review_required: boolean;
+  linked_external_evidence_required: boolean;
+  owner: string;
+  remediation_due_at: string | null;
+};
+
+export type ApiVoiceTranscriptTurn = {
+  speaker: string;
+  text: string;
+  timestamp_seconds: number;
+};
+
+export type ApiVoiceTimelineEvent = {
+  event: string;
+  timestamp_seconds: number;
+};
+
+export type ApiVoiceRunRecord = {
+  voice_run_id: string;
+  call_id: string;
+  tenant: string;
+  deployer: string;
+  status: string;
+  disposition: string;
+  applicability: string;
+  created_at: string;
+  updated_at: string;
+  audited_at?: string | null;
+  transcript_text: string;
+  ai_disclosure_status: string;
+  disclosure_timestamp: number | null;
+  high_risk_flag: boolean;
+  emotion_or_biometric_features: boolean;
+  human_handoff: boolean;
+  agent_version: string;
+  policy_version: string;
+  transcript_turns: ApiVoiceTranscriptTurn[];
+  transcript_preview: ApiVoiceTranscriptTurn[];
+  timeline: ApiVoiceTimelineEvent[];
+  findings: ApiVoiceFinding[];
+  finding_count: number;
+  failing_finding_count: number;
+  needs_review_finding_count: number;
+  error: string;
+  auditor_report?: Record<string, unknown>;
+};
+
+export type ApiVoiceRunSummary = {
+  total: number;
+  hard_fail: number;
+  needs_review: number;
+  pass: number;
+};
+
+export type ApiVoiceRunsListResponse = {
+  items: ApiVoiceRunRecord[];
+  total: number;
+  summary: ApiVoiceRunSummary;
+};
+
+export type ApiVoiceRunFilters = {
+  query?: string;
+  status?: string;
+  disposition?: string;
+  tenant?: string;
+  deployer?: string;
+  applicability?: string;
+  ai_disclosure_status?: string;
+  article?: string;
+  severity?: string;
+  from?: string;
+  to?: string;
+  high_risk_flag?: string;
+  emotion_or_biometric_features?: string;
+  human_handoff?: string;
+  page?: number;
+  page_size?: number;
+};
+
 type ApiFetchResult<T> = {
   data: T | null;
   status: number | null;
@@ -128,6 +215,10 @@ function asStringArray(value: unknown): string[] {
 
 function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function asNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function normalizeTraceSummary(trace: Partial<ApiTraceSummary> | null | undefined): ApiTraceSummary {
@@ -257,6 +348,98 @@ function normalizeShareDetail(share: Partial<ApiShareDetail> | null | undefined)
   };
 }
 
+function normalizeVoiceFinding(finding: Partial<ApiVoiceFinding> | null | undefined): ApiVoiceFinding {
+  return {
+    article: String(finding?.article ?? ""),
+    status: String(finding?.status ?? ""),
+    severity: String(finding?.severity ?? ""),
+    reason: String(finding?.reason ?? ""),
+    evidence_span: String(finding?.evidence_span ?? ""),
+    evidence_type: String(finding?.evidence_type ?? ""),
+    confidence: asNumber(finding?.confidence, 0),
+    manual_review_required: Boolean(finding?.manual_review_required),
+    linked_external_evidence_required: Boolean(finding?.linked_external_evidence_required),
+    owner: String(finding?.owner ?? ""),
+    remediation_due_at: finding?.remediation_due_at ? String(finding.remediation_due_at) : null,
+  };
+}
+
+function normalizeVoiceTranscriptTurn(turn: Partial<ApiVoiceTranscriptTurn> | null | undefined): ApiVoiceTranscriptTurn {
+  return {
+    speaker: String(turn?.speaker ?? ""),
+    text: String(turn?.text ?? ""),
+    timestamp_seconds: asNumber(turn?.timestamp_seconds, 0),
+  };
+}
+
+function normalizeVoiceTimelineEvent(
+  event: Partial<ApiVoiceTimelineEvent> | null | undefined,
+): ApiVoiceTimelineEvent {
+  return {
+    event: String(event?.event ?? ""),
+    timestamp_seconds: asNumber(event?.timestamp_seconds, 0),
+  };
+}
+
+function normalizeVoiceRunRecord(record: Partial<ApiVoiceRunRecord> | null | undefined): ApiVoiceRunRecord {
+  return {
+    voice_run_id: String(record?.voice_run_id ?? ""),
+    call_id: String(record?.call_id ?? ""),
+    tenant: String(record?.tenant ?? ""),
+    deployer: String(record?.deployer ?? ""),
+    status: String(record?.status ?? ""),
+    disposition: String(record?.disposition ?? ""),
+    applicability: String(record?.applicability ?? ""),
+    created_at: String(record?.created_at ?? ""),
+    updated_at: String(record?.updated_at ?? ""),
+    audited_at: record?.audited_at ? String(record.audited_at) : null,
+    transcript_text: String(record?.transcript_text ?? ""),
+    ai_disclosure_status: String(record?.ai_disclosure_status ?? ""),
+    disclosure_timestamp: asNullableNumber(record?.disclosure_timestamp),
+    high_risk_flag: Boolean(record?.high_risk_flag),
+    emotion_or_biometric_features: Boolean(record?.emotion_or_biometric_features),
+    human_handoff: Boolean(record?.human_handoff),
+    agent_version: String(record?.agent_version ?? ""),
+    policy_version: String(record?.policy_version ?? ""),
+    transcript_turns: Array.isArray(record?.transcript_turns)
+      ? record.transcript_turns.map(normalizeVoiceTranscriptTurn)
+      : [],
+    transcript_preview: Array.isArray(record?.transcript_preview)
+      ? record.transcript_preview.map(normalizeVoiceTranscriptTurn)
+      : [],
+    timeline: Array.isArray(record?.timeline) ? record.timeline.map(normalizeVoiceTimelineEvent) : [],
+    findings: Array.isArray(record?.findings) ? record.findings.map(normalizeVoiceFinding) : [],
+    finding_count: asNumber(record?.finding_count, 0),
+    failing_finding_count: asNumber(record?.failing_finding_count, 0),
+    needs_review_finding_count: asNumber(record?.needs_review_finding_count, 0),
+    error: String(record?.error ?? ""),
+    auditor_report: asRecord(record?.auditor_report),
+  };
+}
+
+function normalizeVoiceRunSummary(summary: Partial<ApiVoiceRunSummary> | null | undefined): ApiVoiceRunSummary {
+  return {
+    total: asNumber(summary?.total, 0),
+    hard_fail: asNumber(summary?.hard_fail, 0),
+    needs_review: asNumber(summary?.needs_review, 0),
+    pass: asNumber(summary?.pass, 0),
+  };
+}
+
+function normalizeVoiceRunsListResponse(
+  response: Partial<ApiVoiceRunsListResponse> | null | undefined,
+): ApiVoiceRunsListResponse | null {
+  if (!response) {
+    return null;
+  }
+
+  return {
+    items: Array.isArray(response.items) ? response.items.map(normalizeVoiceRunRecord) : [],
+    total: asNumber(response.total, 0),
+    summary: normalizeVoiceRunSummary(response.summary),
+  };
+}
+
 async function fetchJsonDetailed<T>(
   path: string,
   init: RequestInit = {},
@@ -341,6 +524,22 @@ export async function getSharedTrace(shareId: string, origin?: string) {
       origin,
     ),
   );
+}
+
+export async function listVoiceRuns(filters: ApiVoiceRunFilters = {}, origin?: string) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+
+  const path = params.size > 0 ? `/v1/voice-runs?${params.toString()}` : "/v1/voice-runs";
+  return normalizeVoiceRunsListResponse(await fetchJson<ApiVoiceRunsListResponse>(path, {}, origin));
+}
+
+export async function getVoiceRun(voiceRunId: string, origin?: string) {
+  const record = await fetchJson<ApiVoiceRunRecord>(`/v1/voice-runs/${voiceRunId}`, {}, origin);
+  return record ? normalizeVoiceRunRecord(record) : null;
 }
 
 export function getReviewerFromCookie(rawValue?: string | null) {

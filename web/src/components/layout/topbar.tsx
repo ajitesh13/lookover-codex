@@ -9,6 +9,7 @@ const titleMap: Array<{ prefix: string; title: string }> = [
   { prefix: "/pre-run", title: "Pre-run" },
   { prefix: "/compliance", title: "Compliance" },
   { prefix: "/shared", title: "Shared Review" },
+  { prefix: "/voice-runs", title: "Voice Runs" },
   { prefix: "/risk", title: "Risk" },
   { prefix: "/aibom", title: "AIBOM" },
   { prefix: "/violations", title: "Violations" },
@@ -21,6 +22,7 @@ function resolveTitle(pathname: string) {
   if (pathname === "/") return "Overview";
   if (pathname === "/traces") return "Traces";
   if (pathname.startsWith("/traces/")) return "Trace Detail";
+  if (pathname === "/voice-runs") return "Voice Runs";
   return titleMap.find((item) => pathname.startsWith(item.prefix))?.title ?? "Lookover Codex";
 }
 

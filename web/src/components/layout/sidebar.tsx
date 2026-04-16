@@ -8,6 +8,7 @@ import {
   FileText,
   GitBranch,
   LayoutGrid,
+  Mic,
   ScanSearch,
   Settings,
   Shield,
@@ -26,7 +27,8 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutGrid, enabled: true },
-  { href: "/traces", label: "Traces", icon: GitBranch, enabled: true, activePrefixes: ["/traces"] },
+  { href: "/traces", label: "Traces", icon: GitBranch, enabled: true, activePrefixes: ["/traces", "/shared"] },
+  { href: "/voice-runs", label: "Voice Runs", icon: Mic, enabled: true },
   { href: "/scans", label: "Pre Run", icon: ScanSearch, enabled: true, activePrefixes: ["/scans", "/pre-run"] },
   { href: "/compliance", label: "Compliance", icon: Shield, enabled: false },
   { href: "/risk", label: "Risk", icon: ShieldAlert, enabled: false },

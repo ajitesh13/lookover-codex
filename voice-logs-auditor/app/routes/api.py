@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import get_audit_service
+from app.dependencies import get_audit_service, get_report_service
 from app.models import (
     AuditIngestRequest,
     FindingStatus,
@@ -10,8 +10,10 @@ from app.models import (
     LegalHoldRequest,
     RetrievalQuery,
     Severity,
+    TranscriptAuditRequest,
 )
 from app.services.audit_service import AuditService
+from app.services.report_service import ReportService
 
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -115,3 +117,23 @@ def list_findings(
         date_to=date_to,
     )
     return service.list_findings(query)
+
+
+@router.get("/reports/latest")
+def get_latest_report(service: ReportService = Depends(get_report_service)):
+    try:
+        return service.get_latest_report()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/transcript-audits")
+def create_transcript_audit(
+    payload: TranscriptAuditRequest,
+    service: AuditService = Depends(get_audit_service),
+    report_service: ReportService = Depends(get_report_service),
+):
+    try:
+        return report_service.audit_transcript(payload, service)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

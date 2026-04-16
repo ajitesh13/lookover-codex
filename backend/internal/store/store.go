@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -602,6 +603,168 @@ func (s *Store) GetShareDetail(ctx context.Context, shareID string) (types.Share
 	return detail, nil
 }
 
+func (s *Store) CreateVoiceRunPending(ctx context.Context, record types.VoiceRunRecord) error {
+	transcriptTurnsRaw, err := json.Marshal(record.TranscriptTurns)
+	if err != nil {
+		return fmt.Errorf("marshal voice run transcript turns: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO voice_runs (
+			voice_run_id, call_id, tenant, deployer, status, agent_version, policy_version,
+			transcript_text, transcript_turns, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW(), NOW())
+	`,
+		record.VoiceRunID,
+		record.CallID,
+		record.Tenant,
+		record.Deployer,
+		record.Status,
+		record.AgentVersion,
+		record.PolicyVersion,
+		record.TranscriptText,
+		string(transcriptTurnsRaw),
+	)
+	if err != nil {
+		return fmt.Errorf("insert voice run: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) CompleteVoiceRun(ctx context.Context, record types.VoiceRunRecord) error {
+	transcriptTurnsRaw, err := json.Marshal(record.TranscriptTurns)
+	if err != nil {
+		return fmt.Errorf("marshal completed voice run transcript turns: %w", err)
+	}
+	auditorReportRaw, err := json.Marshal(record.AuditorReport)
+	if err != nil {
+		return fmt.Errorf("marshal completed voice run report: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE voice_runs
+		SET status = $2,
+		    disposition = $3,
+		    applicability = $4,
+		    ai_disclosure_status = $5,
+		    disclosure_timestamp = $6,
+		    high_risk_flag = $7,
+		    emotion_or_biometric_features = $8,
+		    human_handoff = $9,
+		    agent_version = $10,
+		    policy_version = $11,
+		    transcript_turns = $12::jsonb,
+		    auditor_report = $13::jsonb,
+		    error = '',
+		    updated_at = NOW(),
+		    audited_at = NOW()
+		WHERE voice_run_id = $1
+	`,
+		record.VoiceRunID,
+		record.Status,
+		record.Disposition,
+		record.Applicability,
+		record.AIDisclosureStatus,
+		record.DisclosureTimestamp,
+		record.HighRiskFlag,
+		record.EmotionOrBiometricFeatures,
+		record.HumanHandoff,
+		record.AgentVersion,
+		record.PolicyVersion,
+		string(transcriptTurnsRaw),
+		string(auditorReportRaw),
+	)
+	if err != nil {
+		return fmt.Errorf("update completed voice run: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) FailVoiceRun(ctx context.Context, voiceRunID, message string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE voice_runs
+		SET status = 'failed',
+		    error = $2,
+		    updated_at = NOW()
+		WHERE voice_run_id = $1
+	`, voiceRunID, message)
+	if err != nil {
+		return fmt.Errorf("update failed voice run: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetVoiceRun(ctx context.Context, voiceRunID string) (types.VoiceRunRecord, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT voice_run_id, call_id, tenant, deployer, status, disposition, applicability, ai_disclosure_status,
+		       disclosure_timestamp, high_risk_flag, emotion_or_biometric_features, human_handoff,
+		       agent_version, policy_version, transcript_text, transcript_turns, auditor_report, error,
+		       created_at, updated_at, audited_at
+		FROM voice_runs
+		WHERE voice_run_id = $1
+	`, voiceRunID)
+	record, err := scanVoiceRun(row)
+	if err != nil {
+		return types.VoiceRunRecord{}, fmt.Errorf("get voice run: %w", err)
+	}
+	return record, nil
+}
+
+func (s *Store) ListVoiceRuns(ctx context.Context, query types.VoiceRunQuery) (types.VoiceRunListResponse, error) {
+	query = normalizeVoiceRunQuery(query)
+	whereSQL, args := buildVoiceRunWhere(query)
+
+	summarySQL := `
+		SELECT COUNT(*) AS total,
+		       COUNT(*) FILTER (WHERE disposition = 'hard_fail') AS hard_fail,
+		       COUNT(*) FILTER (WHERE disposition = 'needs_review') AS needs_review,
+		       COUNT(*) FILTER (WHERE disposition = 'pass') AS pass
+		FROM voice_runs
+	` + whereSQL
+
+	var response types.VoiceRunListResponse
+	if err := s.db.QueryRowContext(ctx, summarySQL, args...).Scan(
+		&response.Total,
+		&response.Summary.HardFail,
+		&response.Summary.NeedsReview,
+		&response.Summary.Pass,
+	); err != nil {
+		return types.VoiceRunListResponse{}, fmt.Errorf("summarize voice runs: %w", err)
+	}
+	response.Summary.Total = response.Total
+
+	argsWithPagination := slices.Clone(args)
+	argsWithPagination = append(argsWithPagination, query.PageSize, (query.Page-1)*query.PageSize)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT voice_run_id, call_id, tenant, deployer, status, disposition, applicability, ai_disclosure_status,
+		       disclosure_timestamp, high_risk_flag, emotion_or_biometric_features, human_handoff,
+		       agent_version, policy_version, transcript_text, transcript_turns, auditor_report, error,
+		       created_at, updated_at, audited_at
+		FROM voice_runs
+	`+whereSQL+`
+		ORDER BY updated_at DESC
+		LIMIT $`+fmt.Sprintf("%d", len(args)+1)+` OFFSET $`+fmt.Sprintf("%d", len(args)+2),
+		argsWithPagination...,
+	)
+	if err != nil {
+		return types.VoiceRunListResponse{}, fmt.Errorf("list voice runs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		record, scanErr := scanVoiceRun(rows)
+		if scanErr != nil {
+			return types.VoiceRunListResponse{}, fmt.Errorf("scan voice run: %w", scanErr)
+		}
+		response.Items = append(response.Items, record)
+	}
+	if err = rows.Err(); err != nil {
+		return types.VoiceRunListResponse{}, fmt.Errorf("iterate voice runs: %w", err)
+	}
+	return response, nil
+}
+
 func (s *Store) SeedUser(ctx context.Context, email, password string) error {
 	if email == "" || password == "" {
 		return nil
@@ -747,4 +910,227 @@ func newID(prefix string) string {
 	buf := make([]byte, 12)
 	_, _ = rand.Read(buf)
 	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(buf))
+}
+
+type voiceRunScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanVoiceRun(scanner voiceRunScanner) (types.VoiceRunRecord, error) {
+	var record types.VoiceRunRecord
+	var transcriptTurnsRaw, auditorReportRaw []byte
+	var disclosureTimestamp sql.NullFloat64
+	var auditedAt sql.NullTime
+
+	err := scanner.Scan(
+		&record.VoiceRunID,
+		&record.CallID,
+		&record.Tenant,
+		&record.Deployer,
+		&record.Status,
+		&record.Disposition,
+		&record.Applicability,
+		&record.AIDisclosureStatus,
+		&disclosureTimestamp,
+		&record.HighRiskFlag,
+		&record.EmotionOrBiometricFeatures,
+		&record.HumanHandoff,
+		&record.AgentVersion,
+		&record.PolicyVersion,
+		&record.TranscriptText,
+		&transcriptTurnsRaw,
+		&auditorReportRaw,
+		&record.Error,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+		&auditedAt,
+	)
+	if err != nil {
+		return types.VoiceRunRecord{}, err
+	}
+
+	if disclosureTimestamp.Valid {
+		record.DisclosureTimestamp = &disclosureTimestamp.Float64
+	}
+	if auditedAt.Valid {
+		record.AuditedAt = &auditedAt.Time
+	}
+	if len(transcriptTurnsRaw) > 0 {
+		if err = json.Unmarshal(transcriptTurnsRaw, &record.TranscriptTurns); err != nil {
+			return types.VoiceRunRecord{}, fmt.Errorf("unmarshal voice run transcript turns: %w", err)
+		}
+	}
+	if len(auditorReportRaw) > 0 {
+		if err = json.Unmarshal(auditorReportRaw, &record.AuditorReport); err != nil {
+			return types.VoiceRunRecord{}, fmt.Errorf("unmarshal voice run report: %w", err)
+		}
+	}
+
+	record.TranscriptPreview = transcriptPreview(record.TranscriptTurns, 6)
+	record.Timeline = voiceTimelineFromReport(record.AuditorReport)
+	record.Findings = voiceFindingsFromReport(record.AuditorReport)
+	record.FindingCount = len(record.Findings)
+	for _, finding := range record.Findings {
+		switch finding.Status {
+		case "fail":
+			record.FailingFindingCount++
+		case "needs_review":
+			record.NeedsReviewFindingCount++
+		}
+	}
+
+	return record, nil
+}
+
+func normalizeVoiceRunQuery(query types.VoiceRunQuery) types.VoiceRunQuery {
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize <= 0 {
+		query.PageSize = 25
+	}
+	if query.PageSize > 100 {
+		query.PageSize = 100
+	}
+	return query
+}
+
+func buildVoiceRunWhere(query types.VoiceRunQuery) (string, []interface{}) {
+	conditions := []string{}
+	args := []interface{}{}
+	add := func(condition string, value interface{}) {
+		args = append(args, value)
+		conditions = append(conditions, fmt.Sprintf(condition, len(args)))
+	}
+
+	if query.Query != "" {
+		value := "%" + strings.ToLower(strings.TrimSpace(query.Query)) + "%"
+		args = append(args, value)
+		placeholder := len(args)
+		conditions = append(conditions, fmt.Sprintf("(LOWER(call_id) LIKE $%d OR LOWER(transcript_text) LIKE $%d)", placeholder, placeholder))
+	}
+	if query.Status != "" {
+		add("status = $%d", query.Status)
+	}
+	if query.Disposition != "" {
+		add("disposition = $%d", query.Disposition)
+	}
+	if query.Tenant != "" {
+		add("tenant = $%d", query.Tenant)
+	}
+	if query.Deployer != "" {
+		add("deployer = $%d", query.Deployer)
+	}
+	if query.Applicability != "" {
+		add("applicability = $%d", query.Applicability)
+	}
+	if query.AIDisclosureStatus != "" {
+		add("ai_disclosure_status = $%d", query.AIDisclosureStatus)
+	}
+	if query.Article != "" {
+		value := "%" + strings.ToLower(strings.TrimSpace(query.Article)) + "%"
+		add(`EXISTS (
+			SELECT 1
+			FROM jsonb_array_elements(COALESCE(auditor_report->'record'->'findings', '[]'::jsonb)) finding
+			WHERE LOWER(finding->>'article') LIKE $%d
+		)`, value)
+	}
+	if query.Severity != "" {
+		value := "%" + strings.ToLower(strings.TrimSpace(query.Severity)) + "%"
+		add(`EXISTS (
+			SELECT 1
+			FROM jsonb_array_elements(COALESCE(auditor_report->'record'->'findings', '[]'::jsonb)) finding
+			WHERE LOWER(finding->>'severity') LIKE $%d
+		)`, value)
+	}
+	if query.DateFrom != nil {
+		add("created_at >= $%d", *query.DateFrom)
+	}
+	if query.DateTo != nil {
+		add("created_at <= $%d", *query.DateTo)
+	}
+	if query.HighRiskFlag != nil {
+		add("high_risk_flag = $%d", *query.HighRiskFlag)
+	}
+	if query.EmotionOrBiometricFeatures != nil {
+		add("emotion_or_biometric_features = $%d", *query.EmotionOrBiometricFeatures)
+	}
+	if query.HumanHandoff != nil {
+		add("human_handoff = $%d", *query.HumanHandoff)
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func transcriptPreview(turns []types.VoiceTranscriptTurn, limit int) []types.VoiceTranscriptTurn {
+	if limit <= 0 || len(turns) <= limit {
+		return turns
+	}
+	return turns[:limit]
+}
+
+func voiceTimelineFromReport(report map[string]interface{}) []types.VoiceTimelineEvent {
+	record, _ := report["record"].(map[string]interface{})
+	rawEvents, _ := record["event_timeline"].([]interface{})
+	events := make([]types.VoiceTimelineEvent, 0, len(rawEvents))
+	for _, raw := range rawEvents {
+		item, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		events = append(events, types.VoiceTimelineEvent{
+			Event:            asString(item["event"]),
+			TimestampSeconds: asFloat(item["timestamp_seconds"]),
+		})
+	}
+	return events
+}
+
+func voiceFindingsFromReport(report map[string]interface{}) []types.VoiceFinding {
+	record, _ := report["record"].(map[string]interface{})
+	rawFindings, _ := record["findings"].([]interface{})
+	findings := make([]types.VoiceFinding, 0, len(rawFindings))
+	for _, raw := range rawFindings {
+		item, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		findings = append(findings, types.VoiceFinding{
+			Article:                        asString(item["article"]),
+			Status:                         asString(item["status"]),
+			Severity:                       asString(item["severity"]),
+			Reason:                         asString(item["reason"]),
+			EvidenceSpan:                   asString(item["evidence_span"]),
+			EvidenceType:                   asString(item["evidence_type"]),
+			Confidence:                     asFloat(item["confidence"]),
+			ManualReviewRequired:           asBool(item["manual_review_required"]),
+			LinkedExternalEvidenceRequired: asBool(item["linked_external_evidence_required"]),
+			Owner:                          asString(item["owner"]),
+			RemediationDueAt:               asString(item["remediation_due_at"]),
+		})
+	}
+	return findings
+}
+
+func asFloat(value interface{}) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	default:
+		return 0
+	}
+}
+
+func asBool(value interface{}) bool {
+	typed, ok := value.(bool)
+	return ok && typed
 }

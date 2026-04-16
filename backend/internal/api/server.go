@@ -21,16 +21,22 @@ import (
 )
 
 type Server struct {
-	store      *store.Store
-	engine     *evaluator.Engine
-	reportsDir string
+	store               *store.Store
+	engine              *evaluator.Engine
+	reportsDir          string
+	voiceAuditorBaseURL string
+	httpClient          *http.Client
 }
 
-func New(store *store.Store, engine *evaluator.Engine, reportsDir string) http.Handler {
+func New(store *store.Store, engine *evaluator.Engine, reportsDir, voiceAuditorBaseURL string, voiceAuditorTimeout time.Duration) http.Handler {
 	server := &Server{
-		store:      store,
-		engine:     engine,
-		reportsDir: reportsDir,
+		store:               store,
+		engine:              engine,
+		reportsDir:          reportsDir,
+		voiceAuditorBaseURL: strings.TrimRight(voiceAuditorBaseURL, "/"),
+		httpClient: &http.Client{
+			Timeout: voiceAuditorTimeout,
+		},
 	}
 
 	router := chi.NewRouter()
@@ -61,6 +67,9 @@ func (s *Server) mountAPI(r chi.Router) {
 	r.Get("/traces/{traceID}/findings", s.handleTraceFindings)
 	r.Post("/traces/{traceID}/share", s.handleShareTrace)
 	r.Get("/shared/{shareID}", s.handleGetShare)
+	r.Get("/voice-runs", s.handleListVoiceRuns)
+	r.Post("/voice-runs", s.handleCreateVoiceRun)
+	r.Get("/voice-runs/{voiceRunID}", s.handleGetVoiceRun)
 	r.Post("/auth/login", s.handleLogin)
 }
 
@@ -202,6 +211,91 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"token": demoSessionToken(email),
 		"user":  demoAuthUser(email),
 	})
+}
+
+func (s *Server) handleListVoiceRuns(w http.ResponseWriter, r *http.Request) {
+	query, err := voiceRunQueryFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	response, err := s.store.ListVoiceRuns(r.Context(), query)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleGetVoiceRun(w http.ResponseWriter, r *http.Request) {
+	record, err := s.store.GetVoiceRun(r.Context(), chi.URLParam(r, "voiceRunID"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
+}
+
+func (s *Server) handleCreateVoiceRun(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var payload types.VoiceRunCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("decode voice run request: %w", err))
+		return
+	}
+
+	payload = normalizeVoiceRunCreateRequest(payload)
+	if strings.TrimSpace(payload.Transcript) == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("transcript is required"))
+		return
+	}
+
+	record := types.VoiceRunRecord{
+		VoiceRunID:     randomID("vr"),
+		CallID:         payload.CallID,
+		Tenant:         payload.Tenant,
+		Deployer:       payload.Deployer,
+		Status:         "pending",
+		AgentVersion:   payload.AgentVersion,
+		PolicyVersion:  payload.PolicyVersion,
+		TranscriptText: payload.Transcript,
+	}
+	if err := s.store.CreateVoiceRunPending(r.Context(), record); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	auditorResponse, auditorReport, err := s.runVoiceAudit(r.Context(), payload)
+	if err != nil {
+		_ = s.store.FailVoiceRun(r.Context(), record.VoiceRunID, err.Error())
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+
+	record.Status = "completed"
+	record.Disposition = auditorResponse.Record.Disposition
+	record.Applicability = auditorResponse.Record.Applicability
+	record.AIDisclosureStatus = auditorResponse.Record.ComplianceEvidence.AIDisclosureStatus
+	record.DisclosureTimestamp = auditorResponse.Record.ComplianceEvidence.DisclosureTimestamp
+	record.HighRiskFlag = auditorResponse.Record.ComplianceEvidence.HighRiskFlag
+	record.EmotionOrBiometricFeatures = auditorResponse.Record.ComplianceEvidence.EmotionRecognitionUsed || auditorResponse.Record.ComplianceEvidence.BiometricCategorisationUsed
+	record.HumanHandoff = auditorResponse.Record.ComplianceEvidence.HumanOversightPathPresent
+	record.TranscriptTurns = firstNonEmptyTranscriptTurns(auditorResponse)
+	record.AuditorReport = auditorReport
+
+	if err = s.store.CompleteVoiceRun(r.Context(), record); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	stored, err := s.store.GetVoiceRun(r.Context(), record.VoiceRunID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, stored)
 }
 
 func (s *Server) closeTrace(ctx context.Context, traceID string) error {
@@ -458,4 +552,183 @@ func randomID(prefix string) string {
 	buf := make([]byte, 8)
 	_, _ = rand.Read(buf)
 	return fmt.Sprintf("%s_%s", prefix, hex.EncodeToString(buf))
+}
+
+func normalizeVoiceRunCreateRequest(payload types.VoiceRunCreateRequest) types.VoiceRunCreateRequest {
+	if strings.TrimSpace(payload.CallID) == "" {
+		payload.CallID = randomID("voice-call")
+	}
+	if strings.TrimSpace(payload.Tenant) == "" {
+		payload.Tenant = "lookover-voice-runs"
+	}
+	if strings.TrimSpace(payload.Deployer) == "" {
+		payload.Deployer = "voice-ops"
+	}
+	if strings.TrimSpace(payload.Language) == "" {
+		payload.Language = "en"
+	}
+	if strings.TrimSpace(payload.AgentVersion) == "" {
+		payload.AgentVersion = "voice-runs-ui-v1"
+	}
+	if strings.TrimSpace(payload.PolicyVersion) == "" {
+		payload.PolicyVersion = "policy-voice-runs-ui"
+	}
+	if strings.TrimSpace(payload.RawAudioURI) == "" {
+		payload.RawAudioURI = "backend://voice-runs"
+	}
+	return payload
+}
+
+func voiceRunQueryFromRequest(r *http.Request) (types.VoiceRunQuery, error) {
+	values := r.URL.Query()
+	dateFrom, err := parseOptionalQueryDate(values.Get("from"), false)
+	if err != nil {
+		return types.VoiceRunQuery{}, err
+	}
+	dateTo, err := parseOptionalQueryDate(values.Get("to"), true)
+	if err != nil {
+		return types.VoiceRunQuery{}, err
+	}
+	page, err := parseIntQuery(values.Get("page"), 1)
+	if err != nil {
+		return types.VoiceRunQuery{}, err
+	}
+	pageSize, err := parseIntQuery(values.Get("page_size"), 25)
+	if err != nil {
+		return types.VoiceRunQuery{}, err
+	}
+
+	return types.VoiceRunQuery{
+		Query:                      strings.TrimSpace(values.Get("query")),
+		Status:                     strings.TrimSpace(values.Get("status")),
+		Disposition:                strings.TrimSpace(values.Get("disposition")),
+		Tenant:                     strings.TrimSpace(values.Get("tenant")),
+		Deployer:                   strings.TrimSpace(values.Get("deployer")),
+		Applicability:              strings.TrimSpace(values.Get("applicability")),
+		AIDisclosureStatus:         strings.TrimSpace(values.Get("ai_disclosure_status")),
+		Article:                    strings.TrimSpace(values.Get("article")),
+		Severity:                   strings.TrimSpace(values.Get("severity")),
+		DateFrom:                   dateFrom,
+		DateTo:                     dateTo,
+		HighRiskFlag:               parseOptionalBoolQuery(values.Get("high_risk_flag")),
+		EmotionOrBiometricFeatures: parseOptionalBoolQuery(values.Get("emotion_or_biometric_features")),
+		HumanHandoff:               parseOptionalBoolQuery(values.Get("human_handoff")),
+		Page:                       page,
+		PageSize:                   pageSize,
+	}, nil
+}
+
+func parseOptionalQueryDate(raw string, inclusiveEnd bool) (*time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date %q", raw)
+	}
+	if inclusiveEnd {
+		parsed = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	}
+	value := parsed.UTC()
+	return &value, nil
+}
+
+func parseIntQuery(raw string, fallback int) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback, nil
+	}
+	var value int
+	if _, err := fmt.Sscanf(raw, "%d", &value); err != nil {
+		return 0, fmt.Errorf("invalid numeric query value %q", raw)
+	}
+	return value, nil
+}
+
+func parseOptionalBoolQuery(raw string) *bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "true":
+		value := true
+		return &value
+	case "false":
+		value := false
+		return &value
+	default:
+		return nil
+	}
+}
+
+func (s *Server) runVoiceAudit(ctx context.Context, payload types.VoiceRunCreateRequest) (types.VoiceAuditorResponse, map[string]interface{}, error) {
+	requestBody := map[string]interface{}{
+		"transcript":                        payload.Transcript,
+		"call_id":                           payload.CallID,
+		"tenant":                            payload.Tenant,
+		"deployer":                          payload.Deployer,
+		"language":                          payload.Language,
+		"agent_version":                     payload.AgentVersion,
+		"policy_version":                    payload.PolicyVersion,
+		"raw_audio_uri":                     payload.RawAudioURI,
+		"synthetic_audio_used":              payload.SyntheticAudioUsed,
+		"synthetic_audio_marked":            payload.SyntheticAudioMarked,
+		"deepfake_like_content_flag":        payload.DeepfakeLikeContentFlag,
+		"emotion_recognition_used":          payload.EmotionRecognitionUsed,
+		"biometric_categorisation_used":     payload.BiometricCategorisationUsed,
+		"decision_support_flag":             payload.DecisionSupportFlag,
+		"human_oversight_path_present":      payload.HumanOversightPathPresent,
+		"notice_to_affected_person_present": payload.NoticeToAffectedPersonPresent,
+		"high_risk_flag":                    payload.HighRiskFlag,
+	}
+
+	rawBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return types.VoiceAuditorResponse{}, nil, fmt.Errorf("marshal voice auditor request: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.voiceAuditorBaseURL+"/api/transcript-audits", strings.NewReader(string(rawBody)))
+	if err != nil {
+		return types.VoiceAuditorResponse{}, nil, fmt.Errorf("build voice auditor request: %w", err)
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return types.VoiceAuditorResponse{}, nil, fmt.Errorf("call voice auditor: %w", err)
+	}
+	defer response.Body.Close()
+
+	var rawResponse map[string]interface{}
+	if err = json.NewDecoder(response.Body).Decode(&rawResponse); err != nil {
+		return types.VoiceAuditorResponse{}, nil, fmt.Errorf("decode voice auditor response: %w", err)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if detail := nonEmptyString(rawResponse["detail"]); detail != "" {
+			return types.VoiceAuditorResponse{}, rawResponse, fmt.Errorf("voice auditor: %s", detail)
+		}
+		if detail := nonEmptyString(rawResponse["error"]); detail != "" {
+			return types.VoiceAuditorResponse{}, rawResponse, fmt.Errorf("voice auditor: %s", detail)
+		}
+		return types.VoiceAuditorResponse{}, rawResponse, fmt.Errorf("voice auditor returned status %d", response.StatusCode)
+	}
+
+	normalizedRaw, err := json.Marshal(rawResponse)
+	if err != nil {
+		return types.VoiceAuditorResponse{}, rawResponse, fmt.Errorf("re-marshal voice auditor response: %w", err)
+	}
+
+	var auditorResponse types.VoiceAuditorResponse
+	if err = json.Unmarshal(normalizedRaw, &auditorResponse); err != nil {
+		return types.VoiceAuditorResponse{}, rawResponse, fmt.Errorf("normalize voice auditor response: %w", err)
+	}
+
+	return auditorResponse, rawResponse, nil
+}
+
+func firstNonEmptyTranscriptTurns(response types.VoiceAuditorResponse) []types.VoiceTranscriptTurn {
+	if len(response.TranscriptTurns) > 0 {
+		return response.TranscriptTurns
+	}
+	return response.Record.TranscriptTurns
 }
