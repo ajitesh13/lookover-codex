@@ -1,0 +1,247 @@
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardInset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--background-muted);
+}
+
+.section {
+  display: grid;
+  gap: 18px;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pageTitle {
+  display: grid;
+  gap: 6px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+}
+
+.heading {
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.subheading {
+  color: var(--foreground-muted);
+  max-width: 72ch;
+  line-height: 1.6;
+}
+
+.pageActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.buttonPrimary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.buttonSecondary {
+  border: 1px solid var(--line);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.buttonGhost {
+  color: var(--foreground-muted);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metricCard {
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.metricLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+}
+
+.metricValue {
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.metricHint {
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.badgeNeutral {
+  background: var(--accent-soft);
+  color: var(--foreground-muted);
+}
+
+.badgeSuccess {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badgeWarning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.badgeDanger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tableShell {
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+}
+
+.table th {
+  padding: 13px 16px;
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--foreground-subtle);
+  border-bottom: 1px solid var(--line);
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--foreground);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tableRowLink:hover td {
+  background: var(--background-muted);
+}
+
+.tableMeta {
+  color: var(--foreground-muted);
+}
+
+.tableFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--foreground-muted);
+  font-size: 13px;
+}
+
+.pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emptyState {
+  padding: 32px;
+  display: grid;
+  gap: 10px;
+}
+
+.emptyTitle {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.emptyBody {
+  color: var(--foreground-muted);
+  line-height: 1.6;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.mono {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .pageHeader {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .tableShell {
+    overflow-x: auto;
+  }
+}
