@@ -1,0 +1,213 @@
+version: 1
+framework: ISO_42001
+description: ISO/IEC 42001 AI management system controls with dedicated evaluator coverage.
+controls:
+  - id: ISO42001-5-2-AI-POLICY
+    citation: Clause 5.2
+    title: AI policy reference present
+    obligation: The organization should maintain and reference an AI management policy.
+    scope: trace
+    required_evidence:
+      - ai_policy_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: ai_policy_ref
+    severity: HIGH
+    priority: P1
+    remediation: Attach the governing AI policy reference to the evaluated trace.
+  - id: ISO42001-6-1-RISK-OPPORTUNITY
+    citation: Clause 6.1
+    title: AI risk and opportunity assessment current
+    obligation: AI-specific risks and opportunities should be documented and current.
+    scope: trace
+    required_evidence:
+      - ai_risk_assessment_ref
+      - ai_risk_assessment_updated_at
+    evaluator:
+      kind: timestamp_age_max_days
+      params:
+        field: ai_risk_assessment_updated_at
+        max_days: 90
+    severity: HIGH
+    priority: P1
+    remediation: Link a current AI risk assessment updated within the last 90 days.
+  - id: ISO42001-6-2-OBJECTIVES
+    citation: Clause 6.2
+    title: AI objectives declared
+    obligation: AI objectives should be defined and measurable.
+    scope: trace
+    required_evidence:
+      - ai_objectives_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: ai_objectives_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Reference the AI objectives or control goals associated with the system.
+  - id: ISO42001-7-2-COMPETENCE
+    citation: Clause 7.2
+    title: Reviewer competence evidenced
+    obligation: People performing oversight should have competence records.
+    scope: span
+    required_evidence:
+      - reviewer_certification_ref
+    evaluator:
+      kind: field_present_on_matching_events
+      params:
+        field: reviewer_certification_ref
+        event_types: [HUMAN_HANDOFF, DECISION]
+    severity: HIGH
+    priority: P1
+    remediation: Attach reviewer training or certification references to oversight events.
+  - id: ISO42001-7-4-COMMUNICATION
+    citation: Clause 7.4
+    title: User and capability disclosures present
+    obligation: AI communications should disclose capability boundaries and AI interaction.
+    scope: trace
+    required_evidence:
+      - disclosure_shown
+    evaluator:
+      kind: combined_disclosure_check
+      params:
+        ai_field: disclosure_shown
+        capability_event_type: CAPABILITY_DISCLOSURE
+    severity: HIGH
+    priority: P1
+    remediation: Provide both AI interaction disclosure and capability/limitation disclosure.
+  - id: ISO42001-7-5-DOCUMENTED-INFO
+    citation: Clause 7.5
+    title: Documented AI information complete
+    obligation: Documented information should cover version, model, and framework details.
+    scope: trace
+    required_evidence:
+      - agent_version
+      - model_id
+      - framework
+    evaluator:
+      kind: fields_present_on_every_event
+      params:
+        fields: [agent_version, model_id, framework]
+    severity: HIGH
+    priority: P1
+    remediation: Ensure all runtime records carry core documented AI system fields.
+  - id: ISO42001-8-1-OPERATIONAL-CONTROL
+    citation: Clause 8.1
+    title: Operational controls enforced
+    obligation: Operational controls should constrain runtime behavior and tool usage.
+    scope: trace
+    required_evidence:
+      - tools_declared_scope
+      - tools_invoked_scope
+    evaluator:
+      kind: subset_field
+      params:
+        superset_field: tools_declared_scope
+        subset_field: tools_invoked_scope
+    severity: HIGH
+    priority: P1
+    remediation: Keep runtime actions within the approved operational scope.
+  - id: ISO42001-8-2-IMPACT-ASSESSMENT
+    citation: Clause 8.2
+    title: AI impact assessment reference present
+    obligation: Significant AI systems should link to an impact assessment.
+    scope: trace
+    required_evidence:
+      - ai_impact_assessment_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: ai_impact_assessment_ref
+    severity: HIGH
+    priority: P1
+    remediation: Attach the AI impact assessment reference for the agent or use case.
+  - id: ISO42001-8-3-DATA-GOVERNANCE
+    citation: Clause 8.3
+    title: AI data governance documented
+    obligation: AI data sources and governance should be documented.
+    scope: trace
+    required_evidence:
+      - data_sources
+    evaluator:
+      kind: structured_sources_present
+      params:
+        field: data_sources
+        required_keys: [name, version, provenance]
+    severity: HIGH
+    priority: P1
+    remediation: Record governed data sources and provenance for AI operation.
+  - id: ISO42001-8-4-TRANSPARENCY
+    citation: Clause 8.4
+    title: AI transparency evidence present
+    obligation: AI system use and output transparency should be documented.
+    scope: trace
+    required_evidence:
+      - disclosure_shown
+    evaluator:
+      kind: combined_disclosure_check
+      params:
+        ai_field: disclosure_shown
+        capability_event_type: CAPABILITY_DISCLOSURE
+    severity: HIGH
+    priority: P1
+    remediation: Log AI disclosures and capability notices for each relevant session.
+  - id: ISO42001-8-5-HUMAN-OVERSIGHT
+    citation: Clause 8.5
+    title: Human oversight evidenced
+    obligation: Human oversight measures should be in place for relevant decisions.
+    scope: trace
+    required_evidence:
+      - human_reviewer_id
+    evaluator:
+      kind: field_present_on_matching_events
+      params:
+        field: human_reviewer_id
+        event_types: [DECISION]
+    severity: HIGH
+    priority: P1
+    remediation: Attach human reviewer identifiers to overseen decisions.
+  - id: ISO42001-8-6-ROBUSTNESS
+    citation: Clause 8.6
+    title: Robustness and misuse screening present
+    obligation: AI systems should be screened for misuse and adversarial prompts.
+    scope: trace
+    required_evidence:
+      - injection_scan_result
+    evaluator:
+      kind: model_inference_scan
+      params:
+        field: injection_scan_result
+        max_score: 0.4
+    severity: HIGH
+    priority: P1
+    remediation: Record robustness and misuse screening on model interactions.
+  - id: ISO42001-9-1-MONITORING
+    citation: Clause 9.1
+    title: AI performance monitored
+    obligation: AI system performance and compliance should be monitored.
+    scope: trace
+    required_evidence:
+      - accuracy_metric
+      - overall_risk_score
+    evaluator:
+      kind: non_empty_fields
+      params:
+        fields: [accuracy_metric, overall_risk_score]
+    severity: MEDIUM
+    priority: P2
+    remediation: Record both system performance and overall risk for ongoing monitoring.
+  - id: ISO42001-10-IMPROVEMENT
+    citation: Clause 10
+    title: Improvement actions recorded
+    obligation: Nonconformities and improvement actions should be tracked.
+    scope: trace
+    required_evidence:
+      - improvement_action_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: improvement_action_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Link corrective or improvement actions back to the evaluated run or agent version.

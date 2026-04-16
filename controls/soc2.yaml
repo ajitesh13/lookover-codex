@@ -1,0 +1,530 @@
+version: 1
+framework: SOC2
+description: SOC 2 Trust Services Criteria adapted for AI agent traces and operating evidence.
+controls:
+  - id: SOC2-CC1-1-POLICY
+    citation: CC1.1
+    title: Policy version declared
+    obligation: Operations should reference the governing policy version.
+    scope: trace
+    required_evidence:
+      - agent_policy_version
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: agent_policy_version
+    severity: HIGH
+    priority: P1
+    remediation: Attach the policy version governing the agent run.
+  - id: SOC2-CC1-2-AUDIT-PACKAGE
+    citation: CC1.2
+    title: Audit package exportable
+    obligation: Evidence should be exportable for governance review.
+    scope: trace
+    required_evidence:
+      - audit_package_ready
+    evaluator:
+      kind: field_equals
+      params:
+        field: audit_package_ready
+        value: true
+    severity: HIGH
+    priority: P1
+    remediation: Generate an exportable audit package for governance review.
+  - id: SOC2-CC2-1-LOG-COMPLETENESS
+    citation: CC2.1
+    title: Event sequence complete
+    obligation: Event logs should have no unexplained gaps.
+    scope: trace
+    required_evidence:
+      - start_time
+      - end_time
+    evaluator:
+      kind: trace_gap_and_chain
+      params:
+        max_gap_seconds: 60
+    severity: CRITICAL
+    priority: P0
+    remediation: Preserve a complete ordered event stream for each trace.
+  - id: SOC2-CC3-1-RISK-ASSESSMENT
+    citation: CC3.1
+    title: Risk assessment referenced
+    obligation: Each agent should link to a current risk assessment artifact.
+    scope: trace
+    required_evidence:
+      - risk_assessment_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: risk_assessment_ref
+    severity: HIGH
+    priority: P1
+    remediation: Add a risk assessment reference to agent metadata.
+  - id: SOC2-CC4-1-HEALTH-METRICS
+    citation: CC4.1
+    title: Health metrics within threshold
+    obligation: Monitoring metrics should stay within defined limits.
+    scope: trace
+    required_evidence:
+      - health_metrics
+    evaluator:
+      kind: health_metrics_within_threshold
+      params:
+        metrics:
+          signing_queue_depth:
+            max: 100
+          event_ingest_lag_seconds:
+            max: 10
+    severity: CRITICAL
+    priority: P0
+    remediation: Emit health metrics and keep ingestion and signing lag within threshold.
+  - id: SOC2-CC5-1-RULE-VERSION
+    citation: CC5.1
+    title: Compliance rules versioned
+    obligation: Each evaluation must record the rule manifest version.
+    scope: trace
+    required_evidence:
+      - ruleset_version
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: ruleset_version
+    severity: HIGH
+    priority: P1
+    remediation: Stamp each evaluation result with the loaded ruleset version.
+  - id: SOC2-CC6-1-REGISTERED-AGENT
+    citation: CC6.1
+    title: Agent registered
+    obligation: Running agents should be known and registered.
+    scope: trace
+    required_evidence:
+      - agent_registration_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: agent_registration_ref
+    severity: CRITICAL
+    priority: P0
+    remediation: Register the agent and attach a registration reference.
+  - id: SOC2-CC6-2-AUTH
+    citation: CC6.2
+    title: Authentication method on every API event
+    obligation: API activity should indicate the authentication mechanism used.
+    scope: span
+    required_evidence:
+      - auth_method
+    evaluator:
+      kind: field_present_on_matching_events
+      params:
+        field: auth_method
+        event_types: [API_CALL]
+    severity: CRITICAL
+    priority: P0
+    remediation: Record `auth_method` on every API call span.
+  - id: SOC2-CC6-3-RBAC
+    citation: CC6.3
+    title: Role-based access tracked
+    obligation: Dashboard and control-plane access should include user roles and no escalation evidence.
+    scope: trace
+    required_evidence:
+      - user_role
+    evaluator:
+      kind: rbac_enforced
+      params:
+        role_field: user_role
+        forbidden_event_type: PRIVILEGE_ESCALATION
+    severity: CRITICAL
+    priority: P0
+    remediation: Log the caller role and prevent privilege escalation events.
+  - id: SOC2-CC6-6-SCOPE
+    citation: CC6.6
+    title: Tool use within declared scope
+    obligation: Agents should not invoke tools beyond their declared access scope.
+    scope: trace
+    required_evidence:
+      - tools_declared_scope
+      - tools_invoked_scope
+    evaluator:
+      kind: subset_field
+      params:
+        superset_field: tools_declared_scope
+        subset_field: tools_invoked_scope
+    severity: HIGH
+    priority: P1
+    remediation: Narrow tool invocations to the declared scope or update the approved scope.
+  - id: SOC2-CC6-7-CHAIN
+    citation: CC6.7
+    title: Chain hash valid on all records
+    obligation: Transmission integrity should be preserved through chained hashes.
+    scope: trace
+    required_evidence:
+      - chain_hash
+    evaluator:
+      kind: hash_chain_valid
+      params: {}
+    severity: CRITICAL
+    priority: P0
+    remediation: Ensure each record carries a valid chain hash linked to the previous record.
+  - id: SOC2-CC6-8-INJECTION
+    citation: CC6.8
+    title: Prompt injection scan recorded
+    obligation: Model interactions should include prompt injection screening.
+    scope: span
+    required_evidence:
+      - injection_scan_result
+    evaluator:
+      kind: model_inference_scan
+      params:
+        field: injection_scan_result
+        max_score: 0.4
+    severity: CRITICAL
+    priority: P0
+    remediation: Attach prompt-injection scan evidence to every model inference span.
+  - id: SOC2-CC7-1-ANOMALY
+    citation: CC7.1
+    title: Anomaly monitoring present
+    obligation: Irregular activity should produce anomaly evidence.
+    scope: trace
+    required_evidence:
+      - anomaly_monitoring_enabled
+    evaluator:
+      kind: field_equals
+      params:
+        field: anomaly_monitoring_enabled
+        value: true
+    severity: CRITICAL
+    priority: P0
+    remediation: Enable anomaly monitoring and log detections as `ANOMALY_DETECTED`.
+  - id: SOC2-CC7-2-HASH-FIELDS
+    citation: CC7.2
+    title: Hash coverage on records
+    obligation: Payload and signed chain hashes should be present on records.
+    scope: trace
+    required_evidence:
+      - payload_hash
+      - chain_hash
+      - signed_chain_hash
+    evaluator:
+      kind: fields_present_on_every_event
+      params:
+        fields: [payload_hash, chain_hash, signed_chain_hash]
+    severity: CRITICAL
+    priority: P0
+    remediation: Write payload, chain, and signed chain hashes on every event.
+  - id: SOC2-CC7-3-INCIDENT-EVAL
+    citation: CC7.3
+    title: Incident raised within one hour of anomaly
+    obligation: Security-relevant anomalies should escalate to incidents quickly.
+    scope: trace
+    required_evidence:
+      - event_type
+    evaluator:
+      kind: followup_event_within_sla
+      params:
+        source_event_type: ANOMALY_DETECTED
+        followup_event_type: INCIDENT
+        hours: 1
+    severity: HIGH
+    priority: P1
+    remediation: Raise an `INCIDENT` event within one hour of anomaly detection.
+  - id: SOC2-CC7-4-INCIDENT-RESPONSE
+    citation: CC7.4
+    title: Incidents resolved within SLA
+    obligation: Incidents should be followed by a documented resolution.
+    scope: trace
+    required_evidence:
+      - event_type
+    evaluator:
+      kind: request_event_followed_by_action
+      params:
+        request_event_type: INCIDENT
+        action_event_type: INCIDENT_RESOLVED
+    severity: HIGH
+    priority: P1
+    remediation: Close incidents with a corresponding `INCIDENT_RESOLVED` event.
+  - id: SOC2-CC7-5-DISCLOSURES
+    citation: CC7.5
+    title: External audit package generated
+    obligation: Disclosures should be supportable with an external audit package.
+    scope: trace
+    required_evidence:
+      - external_audit_package_ready
+    evaluator:
+      kind: field_equals
+      params:
+        field: external_audit_package_ready
+        value: true
+    severity: HIGH
+    priority: P1
+    remediation: Export an external audit package for the evaluated period.
+  - id: SOC2-CC8-1-CHANGE-MANAGEMENT
+    citation: CC8.1
+    title: Agent version changes logged
+    obligation: Agent updates should be explicit and auditable.
+    scope: trace
+    required_evidence:
+      - agent_version
+    evaluator:
+      kind: version_change_logged
+      params:
+        change_event_type: AGENT_UPDATED
+    severity: HIGH
+    priority: P1
+    remediation: Emit `AGENT_UPDATED` whenever an agent version changes.
+  - id: SOC2-CC9-1-RISK-SCORE
+    citation: CC9.1
+    title: Risk score computed per trace
+    obligation: Each trace should have a computed risk score for mitigation and triage.
+    scope: trace
+    required_evidence:
+      - overall_risk_score
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: overall_risk_score
+    severity: CRITICAL
+    priority: P0
+    remediation: Compute and store an overall trace risk score after evaluation.
+  - id: SOC2-CC9-2-VENDOR
+    citation: CC9.2
+    title: Model and tool providers declared
+    obligation: Third-party providers should be identified for risk management.
+    scope: trace
+    required_evidence:
+      - model_provider
+      - tool_provider
+    evaluator:
+      kind: provider_fields_present
+      params:
+        fields: [model_provider, tool_provider]
+    severity: HIGH
+    priority: P1
+    remediation: Record every model and tool provider involved in the trace.
+  - id: SOC2-A1-1-AVAILABILITY-COMMITMENT
+    citation: A1.1
+    title: Availability commitments monitored
+    obligation: Availability commitments should be reflected in health and SLA evidence.
+    scope: trace
+    required_evidence:
+      - health_status
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: health_status
+    severity: HIGH
+    priority: P1
+    remediation: Record service health status and uptime commitments in operational evidence.
+  - id: SOC2-A1-2-AVAILABILITY-MONITORING
+    citation: A1.2
+    title: Availability polling present
+    obligation: Availability should be continuously monitored.
+    scope: trace
+    required_evidence:
+      - availability_checked_at
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: availability_checked_at
+    severity: HIGH
+    priority: P1
+    remediation: Capture regular availability checks with timestamps.
+  - id: SOC2-A1-3-RECOVERY
+    citation: A1.3
+    title: Recovery procedure evidence present
+    obligation: Recovery readiness should be evidenced for monitored services.
+    scope: trace
+    required_evidence:
+      - recovery_procedure_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: recovery_procedure_ref
+    severity: HIGH
+    priority: P1
+    remediation: Link recovery procedures or recovery test evidence to the run context.
+  - id: SOC2-PI1-1-COMPLETE-PROCESSING
+    citation: PI1.1
+    title: Processing completed through pipeline
+    obligation: Records should show complete and accurate pipeline processing.
+    scope: trace
+    required_evidence:
+      - pipeline_status
+    evaluator:
+      kind: field_equals
+      params:
+        field: pipeline_status
+        value: complete
+    severity: HIGH
+    priority: P1
+    remediation: Mark pipeline status as complete after ingestion and evaluation finish successfully.
+  - id: SOC2-PI1-2-EVAL-LATENCY
+    citation: PI1.2
+    title: Evaluation latency within 10 seconds
+    obligation: Outputs should be communicated in a timely fashion.
+    scope: trace
+    required_evidence:
+      - evaluation_latency_ms
+    evaluator:
+      kind: metric_threshold
+      params:
+        maximums:
+          evaluation_latency_ms: 10000
+    severity: HIGH
+    priority: P1
+    remediation: Keep evaluation latency below 10 seconds and record the measured duration.
+  - id: SOC2-PI1-3-ERROR-MONITORING
+    citation: PI1.3
+    title: Processing errors identified
+    obligation: Dead-letter or failure counts should be monitored.
+    scope: trace
+    required_evidence:
+      - processing_error_count
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: processing_error_count
+    severity: HIGH
+    priority: P1
+    remediation: Record processing error counts and route failures to monitored queues or logs.
+  - id: SOC2-PI1-4-AUTHORIZED-OUTPUTS
+    citation: PI1.4
+    title: Outputs limited to authorized parties
+    obligation: Result access should be governed by role-aware access evidence.
+    scope: trace
+    required_evidence:
+      - user_role
+    evaluator:
+      kind: rbac_enforced
+      params:
+        role_field: user_role
+        forbidden_event_type: UNAUTHORIZED_ACCESS
+    severity: HIGH
+    priority: P1
+    remediation: Enforce role checks for report access and log unauthorized attempts.
+  - id: SOC2-P1-1-PRIVACY-NOTICE
+    citation: P1.1
+    title: Privacy notice tracked
+    obligation: Privacy notice delivery should be evidenced.
+    scope: trace
+    required_evidence:
+      - privacy_notice_shown
+    evaluator:
+      kind: first_session_notice
+      params:
+        field: privacy_notice_shown
+    severity: HIGH
+    priority: P1
+    remediation: Log privacy notice delivery during the user session.
+  - id: SOC2-P2-1-CONSENT
+    citation: P2.1
+    title: Consent validated
+    obligation: Choice and consent should be recorded and resolvable.
+    scope: trace
+    required_evidence:
+      - consent_ref
+    evaluator:
+      kind: reference_resolves
+      params:
+        field: consent_ref
+        prefix: consent-
+    severity: HIGH
+    priority: P1
+    remediation: Use resolvable consent references for consent-governed processing.
+  - id: SOC2-P3-1-COLLECTION
+    citation: P3.1
+    title: Collection minimised
+    obligation: Collection practices should follow minimisation controls.
+    scope: trace
+    required_evidence:
+      - data_fields_accessed
+      - purpose
+    evaluator:
+      kind: pii_access_requires_purpose_justification
+      params:
+        pii_fields:
+          - email
+          - phone
+          - ssn
+          - salary
+          - health_record
+          - biometric_template
+    severity: HIGH
+    priority: P1
+    remediation: Align collected fields to the documented purpose and avoid extra PII capture.
+  - id: SOC2-P4-1-RETENTION
+    citation: P4.1
+    title: Retention and disposal tracked
+    obligation: Retention classes and deletion scheduling should be documented.
+    scope: trace
+    required_evidence:
+      - retention_class
+      - scheduled_deletion_at
+    evaluator:
+      kind: non_empty_fields
+      params:
+        fields: [retention_class, scheduled_deletion_at]
+    severity: HIGH
+    priority: P1
+    remediation: Capture both retention class and deletion schedule for private data.
+  - id: SOC2-P5-1-ACCESS
+    citation: P5.1
+    title: Subject access handling tracked
+    obligation: Access rights fulfillment should be measurable.
+    scope: trace
+    required_evidence:
+      - dsr_access_requested_at
+      - dsr_access_completed_at
+    evaluator:
+      kind: request_completed_within_days
+      params:
+        requested_field: dsr_access_requested_at
+        completed_field: dsr_access_completed_at
+        max_days: 30
+    severity: HIGH
+    priority: P1
+    remediation: Track access request completion timestamps and close within policy.
+  - id: SOC2-P6-1-DISCLOSURE
+    citation: P6.1
+    title: Cross-border disclosures safeguarded
+    obligation: Cross-border disclosure should carry a transfer safeguard.
+    scope: trace
+    required_evidence:
+      - data_transfer_destination
+      - transfer_mechanism
+    evaluator:
+      kind: non_eea_requires_field
+      params:
+        country_field: data_transfer_destination
+        required_field: transfer_mechanism
+    severity: HIGH
+    priority: P1
+    remediation: Record a valid transfer mechanism for non-EEA data movement.
+  - id: SOC2-P7-1-QUALITY
+    citation: P7.1
+    title: Data quality checks present
+    obligation: Privacy programs should include data quality controls.
+    scope: trace
+    required_evidence:
+      - data_source_verified
+    evaluator:
+      kind: field_equals
+      params:
+        field: data_source_verified
+        value: true
+    severity: MEDIUM
+    priority: P2
+    remediation: Verify data sources before use and record the verification result.
+  - id: SOC2-P8-1-ENFORCEMENT
+    citation: P8.1
+    title: Compliance trend score tracked
+    obligation: Monitoring and enforcement should include trendable compliance scoring.
+    scope: trace
+    required_evidence:
+      - compliance_trend_score
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: compliance_trend_score
+    severity: MEDIUM
+    priority: P2
+    remediation: Persist a trendable compliance score for longitudinal monitoring.

@@ -1,0 +1,396 @@
+version: 1
+framework: GDPR
+description: GDPR obligations for data-touching AI agents and deployments.
+controls:
+  - id: GDPR-ART5-1A-LAWFUL-BASIS
+    citation: Art. 5(1)(a)
+    title: Lawful basis present and valid
+    obligation: Every personal-data-touching event must declare a lawful basis.
+    scope: span
+    required_evidence:
+      - lawful_basis
+    evaluator:
+      kind: enum_field_on_personal_data_events
+      params:
+        field: lawful_basis
+        allowed: [consent, contract, legal_obligation, vital_interests, public_task, legitimate_interests]
+    severity: CRITICAL
+    priority: P0
+    remediation: Add a valid lawful basis to each data-touching event.
+  - id: GDPR-ART5-1B-PURPOSE
+    citation: Art. 5(1)(b)
+    title: Purpose limitation declared
+    obligation: Purpose must be recorded for personal data processing.
+    scope: span
+    required_evidence:
+      - purpose
+    evaluator:
+      kind: non_empty_field_on_personal_data_events
+      params:
+        field: purpose
+    severity: HIGH
+    priority: P1
+    remediation: Record a non-empty processing purpose whenever personal data is accessed or used.
+  - id: GDPR-ART5-1C-MINIMISATION
+    citation: Art. 5(1)(c)
+    title: Data minimisation enforced
+    obligation: PII fields should not be accessed without a matching purpose justification.
+    scope: span
+    required_evidence:
+      - data_fields_accessed
+      - purpose
+    evaluator:
+      kind: pii_access_requires_purpose_justification
+      params:
+        pii_fields:
+          - email
+          - phone
+          - ssn
+          - salary
+          - health_record
+          - biometric_template
+    severity: HIGH
+    priority: P1
+    remediation: Restrict accessed fields to the stated purpose and justify any PII access.
+  - id: GDPR-ART5-1D-ACCURACY
+    citation: Art. 5(1)(d)
+    title: Data source verified before use
+    obligation: Data used for decisions should be verified at the source.
+    scope: span
+    applies_to:
+      event_types: [DATA_ACCESS]
+    required_evidence:
+      - data_source_verified
+    evaluator:
+      kind: field_equals_on_event_types
+      params:
+        field: data_source_verified
+        value: true
+        event_types: [DATA_ACCESS]
+    severity: MEDIUM
+    priority: P2
+    remediation: Mark decision-relevant data accesses as verified before using them downstream.
+  - id: GDPR-ART5-1E-STORAGE-LIMITATION
+    citation: Art. 5(1)(e)
+    title: Deletion schedule for personal data
+    obligation: Personal data records need a scheduled deletion timestamp.
+    scope: span
+    required_evidence:
+      - retention_class
+      - scheduled_deletion_at
+    evaluator:
+      kind: deletion_schedule_for_personal_data
+      params:
+        deletion_field: scheduled_deletion_at
+    severity: HIGH
+    priority: P1
+    remediation: Add `scheduled_deletion_at` for personal-data-bearing evidence records.
+  - id: GDPR-ART5-1F-INTEGRITY
+    citation: Art. 5(1)(f)
+    title: Encryption and chain integrity present
+    obligation: Personal data evidence must be encrypted and hash chain integrity must hold.
+    scope: trace
+    required_evidence:
+      - data_encrypted
+      - chain_hash
+    evaluator:
+      kind: encryption_and_chain
+      params:
+        encryption_field: data_encrypted
+    severity: CRITICAL
+    priority: P1
+    remediation: Encrypt personal data events and preserve a valid chain hash across the trace.
+  - id: GDPR-ART6-LAWFUL-BASIS-CONSENT
+    citation: Art. 6
+    title: Consent basis requires consent reference
+    obligation: Consent-based processing must link back to a consent record.
+    scope: span
+    required_evidence:
+      - lawful_basis
+      - consent_ref
+    evaluator:
+      kind: conditional_required_field
+      params:
+        if_field: lawful_basis
+        equals: consent
+        required_field: consent_ref
+    severity: CRITICAL
+    priority: P0
+    remediation: Include `consent_ref` whenever `lawful_basis=consent`.
+  - id: GDPR-ART7-CONSENT-CONDITIONS
+    citation: Art. 7
+    title: Consent reference resolvable
+    obligation: Consent references must resolve to a recorded consent artifact.
+    scope: span
+    required_evidence:
+      - consent_ref
+    evaluator:
+      kind: reference_resolves
+      params:
+        field: consent_ref
+        prefix: consent-
+    severity: CRITICAL
+    priority: P1
+    remediation: Use a resolvable consent identifier that maps back to a stored consent artifact.
+  - id: GDPR-ART9-SPECIAL-CATEGORY
+    citation: Art. 9
+    title: Special category data safeguarded
+    obligation: Special category data needs explicit safeguard evidence.
+    scope: span
+    required_evidence:
+      - special_category_flag
+      - special_category_justification
+    evaluator:
+      kind: special_category_requires_justification
+      params:
+        flag_field: special_category_flag
+        justification_field: special_category_justification
+    severity: CRITICAL
+    priority: P0
+    remediation: Flag special category processing and record the lawful safeguard or explicit consent justification.
+  - id: GDPR-ART13-PRIVACY-NOTICE
+    citation: Art. 13
+    title: Privacy notice shown on first session
+    obligation: Direct collection must be paired with a privacy notice.
+    scope: trace
+    required_evidence:
+      - privacy_notice_shown
+    evaluator:
+      kind: first_session_notice
+      params:
+        field: privacy_notice_shown
+    severity: HIGH
+    priority: P1
+    remediation: Show and log the privacy notice on first-session user interactions.
+  - id: GDPR-ART14-INDIRECT-COLLECTION
+    citation: Art. 14
+    title: Indirect collection disclosure within 30 days
+    obligation: Third-party data collection requires timely disclosure.
+    scope: trace
+    required_evidence:
+      - data_source_disclosure_at
+    evaluator:
+      kind: indirect_source_disclosure
+      params:
+        field: data_source_disclosure_at
+        max_days: 30
+    severity: HIGH
+    priority: P1
+    remediation: Record a disclosure timestamp within 30 days when indirect data is used.
+  - id: GDPR-ART15-ACCESS
+    citation: Art. 15
+    title: Access requests fulfilled within 30 days
+    obligation: Data subject access requests should complete within the legal SLA.
+    scope: trace
+    required_evidence:
+      - dsr_access_requested_at
+      - dsr_access_completed_at
+    evaluator:
+      kind: request_completed_within_days
+      params:
+        requested_field: dsr_access_requested_at
+        completed_field: dsr_access_completed_at
+        max_days: 30
+    severity: HIGH
+    priority: P2
+    remediation: Track access requests end to end and close them within 30 days.
+  - id: GDPR-ART16-RECTIFICATION
+    citation: Art. 16
+    title: Rectification requests actioned
+    obligation: Correction requests should be logged and completed.
+    scope: trace
+    required_evidence:
+      - event_type
+    evaluator:
+      kind: request_event_followed_by_action
+      params:
+        request_event_type: DSR_RECTIFICATION_REQUEST
+        action_event_type: DATA_CORRECTION
+    severity: MEDIUM
+    priority: P2
+    remediation: Emit a `DATA_CORRECTION` event whenever a rectification request is received.
+  - id: GDPR-ART17-ERASURE
+    citation: Art. 17
+    title: Data subject identifiers hashed
+    obligation: Erasure records should use hashed subject identifiers rather than raw PII.
+    scope: span
+    required_evidence:
+      - data_subjects
+    evaluator:
+      kind: hashed_identifier_list
+      params:
+        field: data_subjects
+        min_length: 32
+    severity: CRITICAL
+    priority: P1
+    remediation: Store subject identifiers as hashes or pseudonymous IDs, not direct personal identifiers.
+  - id: GDPR-ART18-RESTRICTION
+    citation: Art. 18
+    title: Restricted processing subjects not used in decisions
+    obligation: Restricted subjects should not appear in decision events.
+    scope: trace
+    required_evidence:
+      - processing_restricted
+      - data_subjects
+    evaluator:
+      kind: restricted_subject_not_used_in_decision
+      params:
+        restriction_field: processing_restricted
+    severity: CRITICAL
+    priority: P1
+    remediation: Halt or bypass decisioning for restricted subjects until the restriction is lifted.
+  - id: GDPR-ART20-PORTABILITY
+    citation: Art. 20
+    title: Data portability supported
+    obligation: Subject data should be exportable in a machine-readable format.
+    scope: trace
+    required_evidence:
+      - subject_export_supported
+    evaluator:
+      kind: field_equals
+      params:
+        field: subject_export_supported
+        value: true
+    severity: MEDIUM
+    priority: P2
+    remediation: Provide a machine-readable export path and declare support in trace metadata.
+  - id: GDPR-ART21-OBJECTION
+    citation: Art. 21
+    title: Processing stops within one hour of objection
+    obligation: Data subject objections should halt downstream processing rapidly.
+    scope: trace
+    required_evidence:
+      - objection_ref
+    evaluator:
+      kind: objection_halts_processing
+      params:
+        objection_event_type: DSR_OBJECTION
+        max_hours: 1
+    severity: CRITICAL
+    priority: P0
+    remediation: Emit a stop or restriction event within one hour of receiving an objection.
+  - id: GDPR-ART22-AUTOMATED-DECISION
+    citation: Art. 22
+    title: Automated decisions with personal data include human handoff
+    obligation: High-impact automated decisions using personal data require human intervention evidence.
+    scope: trace
+    required_evidence:
+      - pii_flags
+    evaluator:
+      kind: automated_decision_requires_handoff
+      params:
+        decision_event_type: DECISION
+        handoff_event_type: HUMAN_HANDOFF
+    severity: CRITICAL
+    priority: P0
+    remediation: Insert a `HUMAN_HANDOFF` span whenever a decision event uses personal data for consequential outcomes.
+  - id: GDPR-ART25-PRIVACY-BY-DESIGN
+    citation: Art. 25
+    title: Privacy by design declaration
+    obligation: Agent metadata should declare privacy-by-design coverage.
+    scope: trace
+    required_evidence:
+      - privacy_by_design
+    evaluator:
+      kind: field_equals
+      params:
+        field: privacy_by_design
+        value: true
+    severity: MEDIUM
+    priority: P2
+    remediation: Add `privacy_by_design=true` to agent metadata once the design review has been completed.
+  - id: GDPR-ART30-RECORDS
+    citation: Art. 30
+    title: Records of processing complete
+    obligation: Processing records need agent, consent, and subject references when applicable.
+    scope: trace
+    required_evidence:
+      - agent_id
+      - data_subjects
+    evaluator:
+      kind: records_of_processing_complete
+      params:
+        required_fields: [agent_id, data_subjects]
+        conditional_fields:
+          consent: consent_ref
+    severity: HIGH
+    priority: P1
+    remediation: Ensure traces include core processing record identifiers and consent references when consent is the basis.
+  - id: GDPR-ART32-SECURITY
+    citation: Art. 32(1)
+    title: Security of processing evidenced
+    obligation: Encryption and in-transit protection should be documented.
+    scope: trace
+    required_evidence:
+      - encryption_standard
+      - tls_in_transit
+    evaluator:
+      kind: field_set_and_true
+      params:
+        string_field: encryption_standard
+        bool_field: tls_in_transit
+    severity: HIGH
+    priority: P1
+    remediation: Document the encryption standard and confirm TLS for data in transit.
+  - id: GDPR-ART33-BREACH
+    citation: Art. 33
+    title: Breach reported within 72 hours
+    obligation: Breaches must trigger notification within the statutory window.
+    scope: trace
+    required_evidence:
+      - event_type
+    evaluator:
+      kind: followup_event_within_sla
+      params:
+        source_event_type: BREACH_DETECTED
+        followup_event_type: BREACH_REPORTED
+        hours: 72
+    severity: CRITICAL
+    priority: P0
+    remediation: Emit a `BREACH_REPORTED` event within 72 hours of `BREACH_DETECTED`.
+  - id: GDPR-ART35-DPIA
+    citation: Art. 35
+    title: High-risk processing has DPIA reference
+    obligation: High-risk processing should link to a DPIA.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - dpia_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: dpia_ref
+    severity: HIGH
+    priority: P1
+    remediation: Reference the approved DPIA for high-risk processing traces.
+  - id: GDPR-ART44-TRANSFERS
+    citation: Art. 44
+    title: Non-EEA transfers require safeguard
+    obligation: Cross-border personal data transfers must carry a legal safeguard.
+    scope: trace
+    required_evidence:
+      - data_transfer_destination
+    evaluator:
+      kind: non_eea_requires_field
+      params:
+        country_field: data_transfer_destination
+        required_field: transfer_mechanism
+    severity: CRITICAL
+    priority: P0
+    remediation: Record the transfer destination and the legal transfer mechanism for non-EEA movement.
+  - id: GDPR-ART46-TRANSFER-MECHANISM
+    citation: Art. 46
+    title: Transfer mechanism valid
+    obligation: Transfer safeguards must use a recognized legal mechanism.
+    scope: trace
+    required_evidence:
+      - transfer_mechanism
+    evaluator:
+      kind: enum_field
+      params:
+        field: transfer_mechanism
+        allowed: [scc, bcr, adequacy, derogation]
+    severity: CRITICAL
+    priority: P0
+    remediation: Use a valid transfer mechanism value such as `scc`, `bcr`, or `adequacy`.

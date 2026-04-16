@@ -1,0 +1,163 @@
+version: 1
+framework: OWASP_LLM_TOP_10_2025
+description: OWASP LLM Top 10 controls for model and agent runtime behavior.
+controls:
+  - id: OWASP-LLM01-PROMPT-INJECTION
+    citation: LLM01:2025
+    title: Prompt injection scan coverage
+    obligation: Model inferences need prompt-injection scanning with bounded risk score.
+    scope: span
+    required_evidence:
+      - injection_scan_result
+    evaluator:
+      kind: model_inference_scan
+      params:
+        field: injection_scan_result
+        max_score: 0.4
+    severity: CRITICAL
+    priority: P0
+    remediation: Run injection detection on every model input and block or flag unsafe results.
+  - id: OWASP-LLM02-SENSITIVE-DISCLOSURE
+    citation: LLM02:2025
+    title: Output privacy and secret scan present
+    obligation: Outputs should be scanned for secrets and personal data leakage.
+    scope: span
+    required_evidence:
+      - output_pii_detected
+      - output_secrets_scan
+    evaluator:
+      kind: output_safety_scan
+      params:
+        pii_field: output_pii_detected
+        scan_field: output_secrets_scan
+    severity: CRITICAL
+    priority: P0
+    remediation: Scan completions for PII, secrets, and leaked system instructions before release.
+  - id: OWASP-LLM03-SUPPLY-CHAIN
+    citation: LLM03:2025
+    title: Providers declared and versions pinned
+    obligation: Model and tool supply chain components should be identifiable and pinned.
+    scope: trace
+    required_evidence:
+      - model_provider
+      - model_version
+      - tool_provider
+    evaluator:
+      kind: providers_pinned
+      params:
+        fields: [model_provider, model_version, tool_provider]
+    severity: HIGH
+    priority: P1
+    remediation: Declare model and tool providers and pin versions or hashes.
+  - id: OWASP-LLM04-POISONING
+    citation: LLM04:2025
+    title: Data validation present for inputs
+    obligation: Retrieved or training-linked data should be validated before use.
+    scope: span
+    required_evidence:
+      - data_validation_result
+    evaluator:
+      kind: field_equals_on_event_types
+      params:
+        field: data_validation_result
+        value: pass
+        event_types: [DATA_ACCESS]
+    severity: HIGH
+    priority: P1
+    remediation: Validate retrieved and upstream data before it reaches model context or agent decisions.
+  - id: OWASP-LLM05-OUTPUT-HANDLING
+    citation: LLM05:2025
+    title: Output validation before tool execution
+    obligation: Model output should be validated before it is passed into tools or APIs.
+    scope: span
+    required_evidence:
+      - output_validation_result
+    evaluator:
+      kind: field_equals_on_event_types
+      params:
+        field: output_validation_result
+        value: pass
+        event_types: [TOOL_CALL, API_CALL]
+    severity: CRITICAL
+    priority: P0
+    remediation: Validate and sanitize model output before using it as tool or API input.
+  - id: OWASP-LLM06-EXCESSIVE-AGENCY
+    citation: LLM06:2025
+    title: Tool use remains within declared scope
+    obligation: Agents should not exercise more agency than explicitly approved.
+    scope: trace
+    required_evidence:
+      - tools_declared_scope
+      - tools_invoked_scope
+    evaluator:
+      kind: subset_field
+      params:
+        superset_field: tools_declared_scope
+        subset_field: tools_invoked_scope
+    severity: CRITICAL
+    priority: P0
+    remediation: Constrain tool invocations to the approved scope or reduce privileges.
+  - id: OWASP-LLM07-SYSTEM-PROMPT-LEAKAGE
+    citation: LLM07:2025
+    title: System prompt protected
+    obligation: System prompts should be hashed and not surfaced in user-visible output.
+    scope: span
+    required_evidence:
+      - system_prompt_hash
+      - system_prompt_exposed
+    evaluator:
+      kind: system_prompt_protected
+      params:
+        hash_field: system_prompt_hash
+        exposed_field: system_prompt_exposed
+    severity: HIGH
+    priority: P1
+    remediation: Store only system prompt hashes and prevent prompt text from reaching user-visible outputs.
+  - id: OWASP-LLM08-VECTOR-WEAKNESS
+    citation: LLM08:2025
+    title: Retrieval sources validated
+    obligation: Retrieval and embedding sources should be validated and versioned.
+    scope: trace
+    required_evidence:
+      - retrieval_source_validated
+      - embedding_provenance
+    evaluator:
+      kind: field_set_and_true
+      params:
+        string_field: embedding_provenance
+        bool_field: retrieval_source_validated
+    severity: HIGH
+    priority: P1
+    remediation: Validate retrieval sources and record embedding provenance before use.
+  - id: OWASP-LLM09-MISINFORMATION
+    citation: LLM09:2025
+    title: Grounding evidence on decisions
+    obligation: High-impact decisions should show factual grounding.
+    scope: span
+    required_evidence:
+      - grounding_score
+    evaluator:
+      kind: metric_threshold
+      params:
+        minimums:
+          grounding_score: 0.6
+    severity: MEDIUM
+    priority: P2
+    remediation: Add grounding checks or factual verification before acting on low-confidence outputs.
+  - id: OWASP-LLM10-UNBOUNDED-CONSUMPTION
+    citation: LLM10:2025
+    title: Cost and loop controls enforced
+    obligation: Runs should stay inside token, cost, and retry boundaries.
+    scope: trace
+    required_evidence:
+      - token_count
+      - cost_usd
+      - loop_detected
+    evaluator:
+      kind: bounded_consumption
+      params:
+        max_tokens: 120000
+        max_cost_usd: 25
+    severity: HIGH
+    priority: P1
+    remediation: Set token, cost, and retry ceilings and terminate loops when detected.

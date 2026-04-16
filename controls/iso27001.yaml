@@ -1,0 +1,227 @@
+version: 1
+framework: ISO_27001
+description: ISO/IEC 27001-aligned operational security controls for AI agents and compliance evidence.
+controls:
+  - id: ISO27001-A5-1-SECURITY-POLICY
+    citation: Annex A 5.1
+    title: Security policy reference present
+    obligation: Information security policies should be referenced by the deployment.
+    scope: trace
+    required_evidence:
+      - security_policy_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: security_policy_ref
+    severity: HIGH
+    priority: P1
+    remediation: Attach the governing security policy reference to the trace.
+  - id: ISO27001-A5-7-THREAT-INTEL
+    citation: Annex A 5.7
+    title: Threat intelligence signal available
+    obligation: Security-relevant threat intelligence should inform runtime screening.
+    scope: trace
+    required_evidence:
+      - threat_intel_version
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: threat_intel_version
+    severity: MEDIUM
+    priority: P2
+    remediation: Reference the threat intelligence feed or rule version used in evaluation.
+  - id: ISO27001-A5-12-CLASSIFICATION
+    citation: Annex A 5.12
+    title: Information classification declared
+    obligation: Sensitive information should be classified before handling.
+    scope: trace
+    required_evidence:
+      - information_classification
+    evaluator:
+      kind: enum_field
+      params:
+        field: information_classification
+        allowed: [public, internal, confidential, restricted]
+    severity: HIGH
+    priority: P1
+    remediation: Classify the information handled by the agent trace.
+  - id: ISO27001-A5-15-ACCESS
+    citation: Annex A 5.15
+    title: Access scope declared
+    obligation: Access rights should be scoped and enforced.
+    scope: trace
+    required_evidence:
+      - tools_declared_scope
+      - tools_invoked_scope
+    evaluator:
+      kind: subset_field
+      params:
+        superset_field: tools_declared_scope
+        subset_field: tools_invoked_scope
+    severity: HIGH
+    priority: P1
+    remediation: Restrict tools and external calls to the approved access scope.
+  - id: ISO27001-A5-19-SUPPLIER
+    citation: Annex A 5.19
+    title: Supplier identity declared
+    obligation: Supplier services should be identified and governed.
+    scope: trace
+    required_evidence:
+      - model_provider
+      - tool_provider
+    evaluator:
+      kind: provider_fields_present
+      params:
+        fields: [model_provider, tool_provider]
+    severity: HIGH
+    priority: P1
+    remediation: Declare every external supplier participating in the trace.
+  - id: ISO27001-A5-23-CLOUD-SECURITY
+    citation: Annex A 5.23
+    title: Cloud security responsibility reference present
+    obligation: Cloud service usage should reference the relevant security controls.
+    scope: trace
+    required_evidence:
+      - cloud_security_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: cloud_security_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Link the cloud security control or shared-responsibility artifact.
+  - id: ISO27001-A5-29-CONTINUITY
+    citation: Annex A 5.29
+    title: Continuity readiness declared
+    obligation: Information security during disruption should be planned.
+    scope: trace
+    required_evidence:
+      - business_continuity_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: business_continuity_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Attach a continuity or resilience reference for the service.
+  - id: ISO27001-A8-2-PRIVILEGED-ACCESS
+    citation: Annex A 8.2
+    title: Privileged access constrained
+    obligation: Privileged access should be limited and monitored.
+    scope: trace
+    required_evidence:
+      - tools_declared_scope
+      - tools_invoked_scope
+    evaluator:
+      kind: subset_field
+      params:
+        superset_field: tools_declared_scope
+        subset_field: tools_invoked_scope
+    severity: HIGH
+    priority: P1
+    remediation: Remove unused privileged tools and monitor each approved privileged action.
+  - id: ISO27001-A8-7-MALWARE
+    citation: Annex A 8.7
+    title: Malicious input screening present
+    obligation: Inputs should be screened for malicious or adversarial content.
+    scope: span
+    required_evidence:
+      - injection_scan_result
+    evaluator:
+      kind: model_inference_scan
+      params:
+        field: injection_scan_result
+        max_score: 0.4
+    severity: HIGH
+    priority: P1
+    remediation: Screen prompts and retrieved context for malicious patterns.
+  - id: ISO27001-A8-8-VULN-MGMT
+    citation: Annex A 8.8
+    title: Vulnerability management reference present
+    obligation: Vulnerability management should be tied to runtime components.
+    scope: trace
+    required_evidence:
+      - vulnerability_scan_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: vulnerability_scan_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Reference the latest vulnerability assessment covering the agent components.
+  - id: ISO27001-A8-10-DELETION
+    citation: Annex A 8.10
+    title: Deletion scheduling present
+    obligation: Information deletion should be scheduled and controlled.
+    scope: trace
+    required_evidence:
+      - scheduled_deletion_at
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: scheduled_deletion_at
+    severity: MEDIUM
+    priority: P2
+    remediation: Record a deletion timestamp for retained sensitive information.
+  - id: ISO27001-A8-11-MASKING
+    citation: Annex A 8.11
+    title: Output masking evidence present
+    obligation: Sensitive outputs should be masked or sanitized.
+    scope: span
+    required_evidence:
+      - output_validation_result
+    evaluator:
+      kind: field_equals_on_event_types
+      params:
+        field: output_validation_result
+        value: pass
+        event_types: [OUTPUT]
+    severity: HIGH
+    priority: P1
+    remediation: Mask or sanitize sensitive output before release and record the validation result.
+  - id: ISO27001-A8-12-DLP
+    citation: Annex A 8.12
+    title: Data leakage screening present
+    obligation: Leakage prevention controls should screen outputs.
+    scope: span
+    required_evidence:
+      - output_pii_detected
+      - output_secrets_scan
+    evaluator:
+      kind: output_safety_scan
+      params:
+        pii_field: output_pii_detected
+        scan_field: output_secrets_scan
+    severity: HIGH
+    priority: P1
+    remediation: Scan outputs for PII and secrets before returning them.
+  - id: ISO27001-A8-24-LOGGING
+    citation: Annex A 8.24
+    title: Event logging complete
+    obligation: Events should be logged for monitoring and investigation.
+    scope: trace
+    required_evidence:
+      - start_time
+      - end_time
+      - session_id
+    evaluator:
+      kind: trace_session_fields
+      params:
+        fields: [start_time, end_time, session_id]
+    severity: HIGH
+    priority: P1
+    remediation: Capture complete session-level logging with timing and identity fields.
+  - id: ISO27001-A8-28-SECURE-CODING
+    citation: Annex A 8.28
+    title: Secure development reference present
+    obligation: Secure coding and review controls should be traceable.
+    scope: trace
+    required_evidence:
+      - secure_development_ref
+    evaluator:
+      kind: non_empty_field
+      params:
+        field: secure_development_ref
+    severity: MEDIUM
+    priority: P2
+    remediation: Reference the secure development standard or review package for the agent version.

@@ -1,0 +1,346 @@
+version: 1
+framework: EU_AI_ACT
+description: EU AI Act obligations focused on agent deployers and high-risk AI operations.
+controls:
+  - id: EU-AIA-ART6-7-RISK-TIER
+    citation: Art. 6-7
+    title: Risk tier classification declared
+    obligation: Every agent must declare a valid EU AI Act risk tier.
+    scope: trace
+    required_evidence:
+      - ai_act_risk_tier
+    evaluator:
+      kind: enum_field
+      params:
+        field: ai_act_risk_tier
+        allowed: [minimal, limited, high, unacceptable]
+    severity: CRITICAL
+    priority: P0
+    remediation: Add `ai_act_risk_tier` to agent metadata and keep it aligned with the use case category.
+  - id: EU-AIA-ANNEXIII-HIGH-RISK-TRIGGER
+    citation: Annex III
+    title: Annex III category triggers high-risk classification
+    obligation: Annex III use cases must be surfaced and escalated to high-risk handling.
+    scope: trace
+    required_evidence:
+      - use_case_category
+      - ai_act_risk_tier
+    evaluator:
+      kind: annex_category_requires_high_risk
+      params:
+        field: use_case_category
+        annex_categories:
+          - biometric_identification
+          - employment
+          - education
+          - essential_private_services
+          - law_enforcement
+          - migration_asylum_border
+          - administration_of_justice
+          - critical_infrastructure
+    severity: CRITICAL
+    priority: P0
+    remediation: Map the use case to Annex III and upgrade the declared risk tier to `high` when applicable.
+  - id: EU-AIA-ART9-1-RISK-MANAGEMENT
+    citation: Art. 9(1)
+    title: Risk management record current
+    obligation: High-risk agents require an up-to-date risk assessment and mitigation record.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - risk_assessment_ref
+      - risk_assessment_updated_at
+    evaluator:
+      kind: timestamp_age_max_days
+      params:
+        field: risk_assessment_updated_at
+        max_days: 90
+    severity: CRITICAL
+    priority: P0
+    remediation: Attach a current risk assessment reference and refresh it within the last 90 days.
+  - id: EU-AIA-ART9-4-DEPLOYMENT-APPROVAL
+    citation: Art. 9(4)
+    title: Human deployment approval before production
+    obligation: High-risk deployment must include a human sign-off before the first production event.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - approved_at
+      - approved_by
+    evaluator:
+      kind: approval_before_first_production_event
+      params:
+        approval_event_type: DEPLOYMENT_APPROVAL
+        production_field: environment
+        production_value: production
+    severity: CRITICAL
+    priority: P0
+    remediation: Emit a `DEPLOYMENT_APPROVAL` event with the approving human identity before production traffic starts.
+  - id: EU-AIA-ART10-2-DATA-GOVERNANCE
+    citation: Art. 10(2)
+    title: Data sources documented with provenance
+    obligation: High-risk systems need data source provenance and versioning.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - data_sources
+    evaluator:
+      kind: structured_sources_present
+      params:
+        field: data_sources
+        required_keys: [name, version, provenance]
+    severity: HIGH
+    priority: P1
+    remediation: Record each training or knowledge source with name, version, and provenance metadata.
+  - id: EU-AIA-ART10-3-BIAS-CHECK
+    citation: Art. 10(3)
+    title: Bias check completed
+    obligation: High-risk systems must record bias assessment results.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - bias_check_result
+    evaluator:
+      kind: field_equals
+      params:
+        field: bias_check_result
+        value: pass
+    severity: HIGH
+    priority: P1
+    remediation: Store the latest bias assessment outcome and only mark covered when it passes.
+  - id: EU-AIA-ART11-1-TECHNICAL-DOCS
+    citation: Art. 11(1)
+    title: Technical documentation fields on every event
+    obligation: Agent version, model, and framework documentation must be present throughout operation logs.
+    scope: trace
+    required_evidence:
+      - agent_version
+      - model_id
+      - framework
+    evaluator:
+      kind: fields_present_on_every_event
+      params:
+        fields: [agent_version, model_id, framework]
+    severity: CRITICAL
+    priority: P0
+    remediation: Include version, model, and framework metadata on every runtime event.
+  - id: EU-AIA-ART12-1-LOG-CONTINUITY
+    citation: Art. 12(1)
+    title: Automatic logging continuity
+    obligation: Logs must be continuous, traceable, and tamper-evident during operation.
+    scope: trace
+    required_evidence:
+      - start_time
+      - end_time
+      - chain_hash
+    evaluator:
+      kind: trace_gap_and_chain
+      params:
+        max_gap_seconds: 60
+    severity: CRITICAL
+    priority: P0
+    remediation: Preserve uninterrupted event timestamps and a valid hash chain across the trace.
+  - id: EU-AIA-ART12-2-SESSION-TRACEABILITY
+    citation: Art. 12(2)
+    title: Session traceability
+    obligation: Operation periods must remain traceable through timestamps and session identity.
+    scope: trace
+    required_evidence:
+      - start_time
+      - end_time
+      - session_id
+    evaluator:
+      kind: trace_session_fields
+      params:
+        fields: [start_time, end_time, session_id]
+    severity: CRITICAL
+    priority: P0
+    remediation: Ensure every trace has a session identifier and valid start/end timestamps.
+  - id: EU-AIA-ART12-4-RETENTION
+    citation: Art. 12(4)
+    title: Retention class justified
+    obligation: Retention must be proportionate and critical events need long-term preservation.
+    scope: trace
+    required_evidence:
+      - retention_class
+    evaluator:
+      kind: retention_policy
+      params:
+        field: retention_class
+        critical_min_years: 5
+    severity: HIGH
+    priority: P1
+    remediation: Assign a retention class with a policy that preserves critical events for at least five years.
+  - id: EU-AIA-ART13-1-AI-DISCLOSURE
+    citation: Art. 13(1)
+    title: Users informed they interact with AI
+    obligation: User-facing interactions must disclose that AI is involved.
+    scope: span
+    required_evidence:
+      - disclosure_shown
+    evaluator:
+      kind: boolean_true_on_event_types
+      params:
+        field: disclosure_shown
+        event_types: [USER_INTERACTION, HUMAN_HANDOFF]
+    severity: CRITICAL
+    priority: P0
+    remediation: Set `disclosure_shown=true` for user-facing spans and handoff moments.
+  - id: EU-AIA-ART13-3B-CAPABILITY-DISCLOSURE
+    citation: Art. 13(3)(b)
+    title: Capability and limitation disclosure present
+    obligation: High-risk sessions should disclose system capabilities and limitations.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - capability_disclosure
+    evaluator:
+      kind: event_exists_per_session
+      params:
+        event_type: CAPABILITY_DISCLOSURE
+    severity: HIGH
+    priority: P1
+    remediation: Emit a `CAPABILITY_DISCLOSURE` event for each session before high-impact operation begins.
+  - id: EU-AIA-ART14-1-HUMAN-OVERSIGHT
+    citation: Art. 14(1)
+    title: Human reviewer on high-risk decisions
+    obligation: High-risk decisions must be overseen by a natural person.
+    scope: span
+    applies_to:
+      risk_tiers: [high]
+      event_types: [DECISION]
+    required_evidence:
+      - human_reviewer_id
+    evaluator:
+      kind: field_present_on_matching_events
+      params:
+        field: human_reviewer_id
+        event_types: [DECISION]
+    severity: CRITICAL
+    priority: P0
+    remediation: Attach `human_reviewer_id` to every high-risk decision span.
+  - id: EU-AIA-ART14-4-OVERRIDE
+    citation: Art. 14(4)
+    title: Override capability evidenced
+    obligation: Humans must be able to stop or override the system.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - override_available
+    evaluator:
+      kind: flag_and_event_for_version
+      params:
+        flag: override_available
+        event_type: HUMAN_OVERRIDE
+    severity: CRITICAL
+    priority: P0
+    remediation: Record `override_available=true` and include at least one `HUMAN_OVERRIDE` event per agent version.
+  - id: EU-AIA-ART14-5-REVIEWER-QUALIFICATION
+    citation: Art. 14(5)
+    title: Reviewer certification reference present
+    obligation: Human handoff events should identify a qualified reviewer.
+    scope: span
+    applies_to:
+      risk_tiers: [high]
+      event_types: [HUMAN_HANDOFF]
+    required_evidence:
+      - reviewer_certification_ref
+    evaluator:
+      kind: field_present_on_matching_events
+      params:
+        field: reviewer_certification_ref
+        event_types: [HUMAN_HANDOFF]
+    severity: HIGH
+    priority: P1
+    remediation: Include a reviewer certification or training reference on every human handoff span.
+  - id: EU-AIA-ART15-1-ACCURACY
+    citation: Art. 15(1)
+    title: Accuracy and error telemetry within threshold
+    obligation: High-risk systems need measurable accuracy and error-rate telemetry.
+    scope: trace
+    applies_to:
+      risk_tiers: [high]
+    required_evidence:
+      - accuracy_metric
+      - error_rate
+    evaluator:
+      kind: metric_threshold
+      params:
+        minimums:
+          accuracy_metric: 0.7
+        maximums:
+          error_rate: 0.1
+    severity: HIGH
+    priority: P1
+    remediation: Record accuracy and error-rate telemetry and keep error rate below the approved threshold.
+  - id: EU-AIA-ART15-3-INJECTION
+    citation: Art. 15(3)
+    title: Prompt injection scan coverage
+    obligation: Every model inference should carry prompt-injection screening evidence.
+    scope: span
+    applies_to:
+      event_types: [MODEL_INFERENCE]
+    required_evidence:
+      - injection_scan_result
+    evaluator:
+      kind: model_inference_scan
+      params:
+        field: injection_scan_result
+        max_score: 0.4
+    severity: CRITICAL
+    priority: P0
+    remediation: Run prompt-injection checks on each model input and attach the scan result to the inference event.
+  - id: EU-AIA-ART26-1-USAGE-POLICY
+    citation: Art. 26(1)
+    title: Provider usage policy referenced
+    obligation: Deployers should reference the policy version governing use of the system.
+    scope: trace
+    required_evidence:
+      - usage_policy_version
+    evaluator:
+      kind: fields_present_on_every_event
+      params:
+        fields: [usage_policy_version]
+    severity: HIGH
+    priority: P1
+    remediation: Add the provider or internal usage policy version to runtime evidence.
+  - id: EU-AIA-ART26-5-INCIDENT-MONITORING
+    citation: Art. 26(5)
+    title: Anomalies trigger incidents within 24 hours
+    obligation: Deployers must monitor anomalies and raise incidents promptly.
+    scope: trace
+    required_evidence:
+      - event_type
+    evaluator:
+      kind: followup_event_within_sla
+      params:
+        source_event_type: ANOMALY_DETECTED
+        followup_event_type: INCIDENT
+        hours: 24
+    severity: HIGH
+    priority: P1
+    remediation: Create an incident event within 24 hours whenever an anomaly is detected.
+  - id: EU-AIA-ART50-1-SYNTHETIC-DISCLOSURE
+    citation: Art. 50(1)
+    title: Synthetic content labeled
+    obligation: AI-generated outputs at limited risk or above should be flagged as synthetic.
+    scope: span
+    applies_to:
+      risk_tiers: [limited, high, unacceptable]
+      event_types: [OUTPUT]
+    required_evidence:
+      - content_type
+    evaluator:
+      kind: synthetic_output_flagged
+      params:
+        field: content_type
+        value: synthetic
+    severity: HIGH
+    priority: P1
+    remediation: Mark generated output spans with `content_type=synthetic`.

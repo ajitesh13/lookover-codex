@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lookover-codex-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lookover_codex}
+      POSTGRES_USER: ${POSTGRES_USER:-lookover}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lookover}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lookover} -d ${POSTGRES_DB:-lookover_codex}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  go-api:
+    build:
+      context: ./backend
+    container_name: lookover-codex-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://lookover:lookover@postgres:5432/lookover_codex?sslmode=disable}
+      API_PORT: ${API_PORT:-8080}
+      REPORTS_DIR: /app/reports
+      CONTROLS_DIR: ${CONTROLS_DIR:-/app/controls}
+      # Optional demo fallback credentials; the web UI can still run in dummy-auth mode.
+      SEED_REVIEWER_EMAIL: ${SEED_REVIEWER_EMAIL:-reviewer@lookover.local}
+      SEED_REVIEWER_PASSWORD: ${SEED_REVIEWER_PASSWORD:-demo-reviewer}
+    volumes:
+      - ./reports:/app/reports
+      - ./controls:/app/controls:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: ./web
+    container_name: lookover-codex-web
+    depends_on:
+      go-api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      NEXT_PUBLIC_LOOKOVER_API_BASE_URL: ${NEXT_PUBLIC_LOOKOVER_API_BASE_URL:-http://localhost:8080}
+      # The app listens on 3000 in-container; WEB_PORT only changes the host mapping.
+      PORT: 3000
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
