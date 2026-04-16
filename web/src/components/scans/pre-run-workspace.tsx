@@ -7,6 +7,7 @@ import {
   titleCase,
 } from "@/lib/lookover-format";
 import { Badge } from "@/components/ui/badge";
+import { CollapsibleJson } from "@/components/ui/collapsible-json";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 
@@ -21,7 +22,7 @@ function flattenEvidence(findings: ApiPreRunFinding[]) {
       title: finding.title,
       ruleId: finding.rule_id,
       key,
-      value: safeText(value),
+      value,
     })),
   );
 }
@@ -236,9 +237,11 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
                   <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
                     {item.ruleId}
                   </div>
-                  <div className="mt-2 text-[13px] leading-6 text-slate-600">
-                    <strong className="font-semibold text-slate-900">{item.key}:</strong>{" "}
-                    {item.value || "—"}
+                  <div className="mt-2 space-y-2">
+                    <div className="text-[13px] leading-6 text-slate-600">
+                      <strong className="font-semibold text-slate-900">{item.key}</strong>
+                    </div>
+                    <CollapsibleJson value={item.value} className="bg-white/65" defaultExpanded={false} />
                   </div>
                 </div>
               ))
