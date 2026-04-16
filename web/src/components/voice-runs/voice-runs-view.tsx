@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertCircle, Mic, ShieldCheck, Waves } from "lucide-react";
+import { Fragment, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { AlertCircle, Mic, Search, ShieldCheck, Waves } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { ApiVoiceRunFilters, ApiVoiceRunRecord, ApiVoiceRunsListResponse } from "@/lib/lookover-api";
+import type {
+  ApiVoiceFinding,
+  ApiVoiceRunFilters,
+  ApiVoiceRunRecord,
+  ApiVoiceRunsListResponse,
+  ApiVoiceTranscriptTurn,
+} from "@/lib/lookover-api";
 import { formatCompactDate, formatRelativeTime } from "@/lib/lookover-format";
 
 const initialDraftFilters: ApiVoiceRunFilters = {
@@ -38,6 +44,22 @@ const badgeTone: Record<string, "neutral" | "success" | "warning" | "danger"> = 
   not_evaluable_from_logs: "neutral",
 };
 
+const INITIAL_VISIBLE_TURNS = 8;
+const VISIBLE_TURN_STEP = 12;
+
+type TranscriptDensity = "comfortable" | "compact";
+
+type TranscriptUIState = {
+  visibleTurns: number;
+  search: string;
+  density: TranscriptDensity;
+};
+
+type GroupedTranscriptTurn = {
+  index: number;
+  turn: ApiVoiceTranscriptTurn;
+};
+
 function toneFor(value: string) {
   return badgeTone[value] ?? "neutral";
 }
@@ -65,7 +87,546 @@ function topArticleCounts(records: ApiVoiceRunRecord[]) {
     .slice(0, 8);
 }
 
-function VoiceRunResult({ record }: { record: ApiVoiceRunRecord }) {
+function previewTurnsForRecord(record: ApiVoiceRunRecord) {
+  if (record.transcript_preview.length > 0) return record.transcript_preview;
+  if (record.transcript_turns.length > 0) return record.transcript_turns.slice(0, 4);
+  return [];
+}
+
+function summarizeBoolean(value: boolean, positive: string, negative: string) {
+  return value ? positive : negative;
+}
+
+function estimateReadTime(turns: ApiVoiceTranscriptTurn[]) {
+  const words = turns
+    .map((turn) => turn.text)
+    .join(" ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const minutes = Math.max(1, Math.ceil(words / 180));
+  return `${minutes} min read`;
+}
+
+function transcriptDurationLabel(turns: ApiVoiceTranscriptTurn[]) {
+  if (turns.length === 0) return "No timing";
+  const first = turns[0]?.timestamp_seconds ?? 0;
+  const last = turns[turns.length - 1]?.timestamp_seconds ?? 0;
+  const duration = Math.max(0, last - first);
+
+  if (duration < 60) return `${duration.toFixed(0)}s span`;
+  return `${(duration / 60).toFixed(1)}m span`;
+}
+
+function runMetadata(record: ApiVoiceRunRecord) {
+  return [
+    `${record.transcript_turns.length} turns`,
+    transcriptDurationLabel(record.transcript_turns),
+    estimateReadTime(record.transcript_turns),
+    `${record.finding_count} findings`,
+  ];
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightSegments(text: string, query: string) {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) {
+    return [{ value: text, match: false }];
+  }
+
+  const matcher = new RegExp(`(${escapeRegex(normalizedQuery)})`, "ig");
+  return text.split(matcher).filter(Boolean).map((value) => ({
+    value,
+    match: value.toLowerCase() === normalizedQuery.toLowerCase(),
+  }));
+}
+
+function countTranscriptMatches(turns: ApiVoiceTranscriptTurn[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return 0;
+
+  return turns.reduce((total, turn) => {
+    const matches = turn.text.toLowerCase().match(new RegExp(escapeRegex(normalizedQuery), "g"));
+    return total + (matches?.length ?? 0);
+  }, 0);
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {highlightSegments(text, query).map((segment, index) =>
+        segment.match ? (
+          <mark key={`${segment.value}-${index}`} className="rounded bg-amber-100 px-0.5 text-inherit">
+            {segment.value}
+          </mark>
+        ) : (
+          <Fragment key={`${segment.value}-${index}`}>{segment.value}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+function groupTranscriptTurns(turns: GroupedTranscriptTurn[]) {
+  const groups: Array<{ speaker: string; turns: GroupedTranscriptTurn[] }> = [];
+
+  for (const entry of turns) {
+    const previous = groups[groups.length - 1];
+    if (previous && previous.speaker === entry.turn.speaker) {
+      previous.turns.push(entry);
+      continue;
+    }
+    groups.push({ speaker: entry.turn.speaker, turns: [entry] });
+  }
+
+  return groups;
+}
+
+function firstTurnIndexAtOrAfter(turns: ApiVoiceTranscriptTurn[], timestamp: number) {
+  const foundIndex = turns.findIndex((turn) => turn.timestamp_seconds >= timestamp);
+  return foundIndex >= 0 ? foundIndex : null;
+}
+
+function resolveFindingTurnIndex(record: ApiVoiceRunRecord, finding: ApiVoiceFinding) {
+  const evidenceKey = finding.evidence_span.trim().toLowerCase();
+  if (record.disclosure_timestamp !== null && finding.article === "50") {
+    return firstTurnIndexAtOrAfter(record.transcript_turns, record.disclosure_timestamp);
+  }
+
+  if (evidenceKey) {
+    const matchedTimeline = record.timeline.find((event) => {
+      const normalizedEvent = event.event.trim().toLowerCase();
+      return normalizedEvent.includes(evidenceKey) || evidenceKey.includes(normalizedEvent);
+    });
+    if (matchedTimeline) {
+      return firstTurnIndexAtOrAfter(record.transcript_turns, matchedTimeline.timestamp_seconds);
+    }
+  }
+
+  return null;
+}
+
+function TranscriptPanel({
+  record,
+  state,
+  onStateChange,
+  jumpToTurn,
+  turnRefs,
+}: {
+  record: ApiVoiceRunRecord;
+  state: TranscriptUIState;
+  onStateChange: (updater: (state: TranscriptUIState) => TranscriptUIState) => void;
+  jumpToTurn: (index: number | null) => void;
+  turnRefs: MutableRefObject<Record<number, HTMLDivElement | null>>;
+}) {
+  const allTurns = record.transcript_turns;
+  const search = state.search.trim();
+  const totalMatches = countTranscriptMatches(allTurns, search);
+  const visibleEntries = allTurns.slice(0, state.visibleTurns).map((turn, index) => ({ turn, index }));
+  const groupedTurns = groupTranscriptTurns(visibleEntries);
+  const firstMatchIndex = search
+    ? allTurns.findIndex((turn) => turn.text.toLowerCase().includes(search.toLowerCase()))
+    : -1;
+
+  return (
+    <div className="rounded-2xl border border-lookover-border bg-slate-50/70">
+      <div className="sticky top-0 z-10 rounded-t-2xl border-b border-lookover-border bg-white/95 px-4 py-4 backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="lookover-label">Transcript</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {runMetadata(record).map((item) => (
+                <span
+                  key={`${record.voice_run_id}-${item}`}
+                  className="rounded-full border border-lookover-border bg-slate-50 px-3 py-1 text-[12px] text-lookover-text-muted"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition ${
+                state.density === "comfortable"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-lookover-border bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              onClick={() => onStateChange((value) => ({ ...value, density: "comfortable" }))}
+            >
+              Comfortable
+            </button>
+            <button
+              type="button"
+              className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition ${
+                state.density === "compact"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-lookover-border bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+              onClick={() => onStateChange((value) => ({ ...value, density: "compact" }))}
+            >
+              Compact
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-lookover-border bg-white px-3 py-2">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input
+              className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-slate-900 outline-none"
+              value={state.search}
+              onChange={(event) => onStateChange((value) => ({ ...value, search: event.target.value }))}
+              placeholder="Search transcript text"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] text-lookover-text-muted">
+              {search ? `${totalMatches} matches` : "Search all turns"}
+            </span>
+            <button
+              type="button"
+              className="rounded-lg border border-lookover-border px-3 py-2 text-[12px] font-medium text-slate-700 transition hover:bg-white disabled:opacity-50"
+              onClick={() => jumpToTurn(firstMatchIndex >= 0 ? firstMatchIndex : null)}
+              disabled={firstMatchIndex < 0}
+            >
+              Jump to first match
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-lookover-border px-3 py-2 text-[12px] font-medium text-slate-700 transition hover:bg-white disabled:opacity-50"
+              onClick={() => jumpToTurn(firstTurnIndexAtOrAfter(allTurns, record.disclosure_timestamp ?? -1))}
+              disabled={record.disclosure_timestamp === null}
+            >
+              Disclosure moment
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 px-4 py-4">
+        {groupedTurns.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-lookover-border bg-white px-4 py-8 text-center text-[14px] text-lookover-text-muted">
+            No structured transcript turns are available for this run.
+          </div>
+        ) : null}
+
+        {groupedTurns.map((group, groupIndex) => {
+          const groupStart = group.turns[0]?.turn.timestamp_seconds ?? 0;
+          const groupEnd = group.turns[group.turns.length - 1]?.turn.timestamp_seconds ?? groupStart;
+
+          return (
+            <section key={`${group.speaker}-${groupStart}-${groupIndex}`} className="rounded-2xl border border-lookover-border bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-lookover-border px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">{group.speaker}</span>
+                  <span className="text-[12px] text-lookover-text-muted">
+                    {group.turns.length} turn{group.turns.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <span className="text-[12px] text-lookover-text-muted">
+                  {groupStart.toFixed(1)}s to {groupEnd.toFixed(1)}s
+                </span>
+              </div>
+              <div className={state.density === "compact" ? "divide-y divide-slate-100" : "space-y-3 p-3"}>
+                {group.turns.map(({ turn, index }) => (
+                  <div
+                    key={`${index}-${turn.timestamp_seconds}-${turn.text.slice(0, 18)}`}
+                    ref={(element) => {
+                      turnRefs.current[index] = element;
+                    }}
+                    className={
+                      state.density === "compact"
+                        ? "grid gap-2 px-4 py-3 md:grid-cols-[84px,1fr]"
+                        : "rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+                    }
+                  >
+                    <div className="text-[12px] font-medium text-lookover-text-muted">{turn.timestamp_seconds.toFixed(1)}s</div>
+                    <p className={`text-slate-900 ${state.density === "compact" ? "text-[13px] leading-6" : "text-[14px] leading-6"}`}>
+                      <HighlightedText text={turn.text} query={search} />
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+
+        {state.visibleTurns < allTurns.length ? (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              className="rounded-xl border border-lookover-border bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-900 transition hover:bg-slate-50"
+              onClick={() =>
+                onStateChange((value) => ({
+                  ...value,
+                  visibleTurns: Math.min(allTurns.length, value.visibleTurns + VISIBLE_TURN_STEP),
+                }))
+              }
+            >
+              Show {Math.min(VISIBLE_TURN_STEP, allTurns.length - state.visibleTurns)} more turns
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function VoiceRunExpandedContent({
+  record,
+  state,
+  onStateChange,
+}: {
+  record: ApiVoiceRunRecord;
+  state: TranscriptUIState;
+  onStateChange: (updater: (state: TranscriptUIState) => TranscriptUIState) => void;
+}) {
+  const turnRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  function jumpToTurn(index: number | null) {
+    if (index === null) return;
+
+    const nextVisibleTurns = Math.max(state.visibleTurns, index + 1);
+    if (nextVisibleTurns !== state.visibleTurns) {
+      onStateChange((value) => ({ ...value, visibleTurns: nextVisibleTurns }));
+      setTimeout(() => {
+        turnRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 40);
+      return;
+    }
+
+    turnRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[1.15fr,0.85fr]">
+      <TranscriptPanel
+        record={record}
+        state={state}
+        onStateChange={onStateChange}
+        jumpToTurn={jumpToTurn}
+        turnRefs={turnRefs}
+      />
+
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className="lookover-label">Created</div>
+              <div className="mt-2 text-[14px] text-slate-900">{formatCompactDate(record.created_at)}</div>
+            </div>
+            <div>
+              <div className="lookover-label">Applicability</div>
+              <div className="mt-2 text-[14px] text-slate-900">{record.applicability.replaceAll("_", " ")}</div>
+            </div>
+            <div>
+              <div className="lookover-label">Tenant / Deployer</div>
+              <div className="mt-2 text-[14px] text-slate-900">
+                {record.tenant || "—"} / {record.deployer || "—"}
+              </div>
+            </div>
+            <div>
+              <div className="lookover-label">Disclosure</div>
+              <div className="mt-2 text-[14px] text-slate-900">{record.ai_disclosure_status.replaceAll("_", " ")}</div>
+            </div>
+            <div>
+              <div className="lookover-label">Risk flag</div>
+              <div className="mt-2 text-[14px] text-slate-900">
+                {summarizeBoolean(record.high_risk_flag, "High risk", "Not high risk")}
+              </div>
+            </div>
+            <div>
+              <div className="lookover-label">Human handoff</div>
+              <div className="mt-2 text-[14px] text-slate-900">
+                {summarizeBoolean(record.human_handoff, "Path present", "No path")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {record.timeline.length > 0 ? (
+          <div className="rounded-2xl border border-lookover-border bg-white px-4 py-4">
+            <div className="lookover-label">Timeline</div>
+            <div className="mt-3 space-y-2">
+              {record.timeline.map((item, index) => (
+                <button
+                  key={`${record.voice_run_id}-timeline-${index}`}
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-xl border border-lookover-border bg-slate-50/70 px-3 py-3 text-left transition hover:bg-slate-50"
+                  onClick={() => jumpToTurn(firstTurnIndexAtOrAfter(record.transcript_turns, item.timestamp_seconds))}
+                >
+                  <span className="text-[13px] font-medium text-slate-900">{item.event}</span>
+                  <span className="text-[12px] text-lookover-text-muted">{item.timestamp_seconds.toFixed(1)}s</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl border border-lookover-border bg-white">
+          <div className="border-b border-lookover-border px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="lookover-label">Findings</div>
+                <div className="mt-2 text-[14px] text-lookover-text-muted">{findingsSummary(record)}</div>
+              </div>
+              <Badge tone={toneFor(record.disposition)}>{record.disposition.replaceAll("_", " ")}</Badge>
+            </div>
+          </div>
+          <div className="space-y-3 px-4 py-4">
+            {record.findings.map((finding, index) => {
+              const targetIndex = resolveFindingTurnIndex(record, finding);
+              return (
+                <div key={`${finding.article}-${index}`} className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={toneFor(finding.status)}>{finding.status.replaceAll("_", " ")}</Badge>
+                      <span className="text-[13px] font-semibold text-slate-900">Article {finding.article}</span>
+                      <span className="text-[12px] uppercase tracking-[0.12em] text-lookover-text-muted">{finding.severity}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-lookover-border bg-white px-3 py-2 text-[12px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-default disabled:opacity-60"
+                      onClick={() => jumpToTurn(targetIndex)}
+                      disabled={targetIndex === null}
+                      title={targetIndex === null ? "This finding does not expose a transcript timestamp." : undefined}
+                    >
+                      {targetIndex === null ? "Evidence not time-linked" : "Jump to transcript"}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-[14px] leading-6 text-slate-700">{finding.reason}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[12px] text-lookover-text-muted">
+                    <span className="rounded-full border border-white/80 bg-white px-3 py-1">
+                      Confidence {Math.round(finding.confidence * 100)}%
+                    </span>
+                    <span className="rounded-full border border-white/80 bg-white px-3 py-1">
+                      {finding.owner || "Owner unassigned"}
+                    </span>
+                    {finding.manual_review_required ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">Manual review</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            {record.findings.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-lookover-border bg-slate-50/70 px-4 py-8 text-center text-[14px] text-lookover-text-muted">
+                No findings are stored for this run.
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {record.transcript_turns.length === 0 && record.transcript_text ? (
+          <div className="rounded-2xl border border-lookover-border bg-white px-4 py-4">
+            <div className="lookover-label">Raw transcript fallback</div>
+            <p className="mt-3 whitespace-pre-wrap text-[14px] leading-6 text-slate-700">{record.transcript_text}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function VoiceRunCard({
+  record,
+  open,
+  onToggle,
+  state,
+  onStateChange,
+}: {
+  record: ApiVoiceRunRecord;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  state: TranscriptUIState;
+  onStateChange: (updater: (state: TranscriptUIState) => TranscriptUIState) => void;
+}) {
+  const previewTurns = previewTurnsForRecord(record);
+
+  return (
+    <details
+      open={open}
+      onToggle={(event) => onToggle((event.currentTarget as HTMLDetailsElement).open)}
+      className="rounded-[20px] border border-lookover-border bg-white"
+    >
+      <summary className="cursor-pointer list-none px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="lookover-label">Voice run</div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h3 className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">{record.call_id}</h3>
+              <span className="text-[13px] text-lookover-text-muted">{formatRelativeTime(record.updated_at)}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {runMetadata(record).map((item) => (
+                <span
+                  key={`${record.voice_run_id}-${item}`}
+                  className="rounded-full border border-lookover-border bg-slate-50 px-3 py-1 text-[12px] text-lookover-text-muted"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-2">
+              {previewTurns.length > 0 ? (
+                previewTurns.slice(0, 3).map((turn, index) => (
+                  <div
+                    key={`${record.voice_run_id}-preview-${index}`}
+                    className="rounded-xl border border-lookover-border bg-slate-50/70 px-3 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">{turn.speaker}</span>
+                      <span className="text-[12px] text-lookover-text-muted">{turn.timestamp_seconds.toFixed(1)}s</span>
+                    </div>
+                    <p className="mt-1.5 max-h-[3.25rem] overflow-hidden text-[13px] leading-6 text-slate-800">{turn.text}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="max-w-[64ch] text-[14px] leading-6 text-lookover-text-muted">
+                  {record.transcript_text || "Stored voice-run transcript"}
+                </p>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[12px] text-lookover-text-muted">
+              <span>{summarizeBoolean(record.high_risk_flag, "High risk", "Standard risk")}</span>
+              <span>{summarizeBoolean(record.human_handoff, "Human path present", "No handoff path")}</span>
+              <span>
+                {summarizeBoolean(
+                  record.emotion_or_biometric_features,
+                  "Biometric or emotion signals used",
+                  "No biometric or emotion signals",
+                )}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={toneFor(record.status)}>{record.status.replaceAll("_", " ")}</Badge>
+            <Badge tone={toneFor(record.disposition)}>{record.disposition.replaceAll("_", " ")}</Badge>
+            <Badge tone="neutral">{record.ai_disclosure_status.replaceAll("_", " ")}</Badge>
+          </div>
+        </div>
+      </summary>
+      <div className="border-t border-lookover-border px-5 py-5">
+        <VoiceRunExpandedContent record={record} state={state} onStateChange={onStateChange} />
+      </div>
+    </details>
+  );
+}
+
+function LatestVoiceRunResult({
+  record,
+  state,
+  onStateChange,
+}: {
+  record: ApiVoiceRunRecord;
+  state: TranscriptUIState;
+  onStateChange: (updater: (state: TranscriptUIState) => TranscriptUIState) => void;
+}) {
   return (
     <section className="lookover-card overflow-hidden">
       <div className="border-b border-lookover-border px-6 py-5">
@@ -73,6 +634,9 @@ function VoiceRunResult({ record }: { record: ApiVoiceRunRecord }) {
           <div>
             <div className="lookover-label">Stored audit</div>
             <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-slate-900">{record.call_id}</h2>
+            <p className="mt-2 text-[14px] leading-6 text-lookover-text-muted">
+              The newest backend-created voice run is shown with the same transcript controls as stored runs.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={toneFor(record.status)}>{record.status.replaceAll("_", " ")}</Badge>
@@ -81,40 +645,8 @@ function VoiceRunResult({ record }: { record: ApiVoiceRunRecord }) {
           </div>
         </div>
       </div>
-      <div className="grid gap-5 px-6 py-6 xl:grid-cols-[0.95fr,1.05fr]">
-        <div className="space-y-4">
-          <div>
-            <div className="lookover-label">Parsed transcript</div>
-            <div className="mt-3 space-y-3">
-              {record.transcript_turns.map((turn, index) => (
-                <div key={`${turn.timestamp_seconds}-${index}`} className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">{turn.speaker}</span>
-                    <span className="text-[12px] text-lookover-text-muted">{turn.timestamp_seconds.toFixed(1)}s</span>
-                  </div>
-                  <p className="mt-2 text-[14px] leading-6 text-slate-900">{turn.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <div className="lookover-label">Findings</div>
-            <div className="mt-3 space-y-3">
-              {record.findings.map((finding, index) => (
-                <div key={`${finding.article}-${index}`} className="rounded-2xl border border-lookover-border bg-white px-4 py-4 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={toneFor(finding.status)}>{finding.status.replaceAll("_", " ")}</Badge>
-                    <span className="text-[13px] font-semibold text-slate-900">Article {finding.article}</span>
-                    <span className="text-[12px] uppercase tracking-[0.12em] text-lookover-text-muted">{finding.severity}</span>
-                  </div>
-                  <p className="mt-3 text-[14px] leading-6 text-slate-700">{finding.reason}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      <div className="px-6 py-6">
+        <VoiceRunExpandedContent record={record} state={state} onStateChange={onStateChange} />
       </div>
     </section>
   );
@@ -131,8 +663,33 @@ export function VoiceRunsView({ initialResponse }: { initialResponse: ApiVoiceRu
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [latestRecord, setLatestRecord] = useState<ApiVoiceRunRecord | null>(null);
+  const [runOpenState, setRunOpenState] = useState<Record<string, boolean>>({});
+  const [transcriptStates, setTranscriptStates] = useState<Record<string, TranscriptUIState>>({});
 
   const articleCounts = useMemo(() => topArticleCounts(response?.items ?? []), [response]);
+
+  function transcriptStateFor(recordId: string): TranscriptUIState {
+    return (
+      transcriptStates[recordId] ?? {
+        visibleTurns: INITIAL_VISIBLE_TURNS,
+        search: "",
+        density: "comfortable",
+      }
+    );
+  }
+
+  function updateTranscriptState(recordId: string, updater: (state: TranscriptUIState) => TranscriptUIState) {
+    setTranscriptStates((value) => ({
+      ...value,
+      [recordId]: updater(
+        value[recordId] ?? {
+          visibleTurns: INITIAL_VISIBLE_TURNS,
+          search: "",
+          density: "comfortable",
+        },
+      ),
+    }));
+  }
 
   async function loadVoiceRuns(filters: ApiVoiceRunFilters) {
     setLoading(true);
@@ -306,7 +863,13 @@ export function VoiceRunsView({ initialResponse }: { initialResponse: ApiVoiceRu
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-600">{error}</div>
       ) : null}
 
-      {latestRecord ? <VoiceRunResult record={latestRecord} /> : null}
+      {latestRecord ? (
+        <LatestVoiceRunResult
+          record={latestRecord}
+          state={transcriptStateFor(latestRecord.voice_run_id)}
+          onStateChange={(updater) => updateTranscriptState(latestRecord.voice_run_id, updater)}
+        />
+      ) : null}
 
       <section className="lookover-card px-5 py-5">
         <div className="grid gap-4 xl:grid-cols-[1.2fr,0.9fr,0.9fr,0.9fr,0.9fr,0.9fr]">
@@ -474,112 +1037,19 @@ export function VoiceRunsView({ initialResponse }: { initialResponse: ApiVoiceRu
           </div>
           <div className="space-y-4 px-6 py-6">
             {(response?.items ?? []).map((record) => (
-              <details key={record.voice_run_id} className="rounded-[20px] border border-lookover-border bg-white">
-                <summary className="cursor-pointer list-none px-5 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="lookover-label">Voice run</div>
-                      <h3 className="mt-2 text-[18px] font-semibold tracking-[-0.03em] text-slate-900">{record.call_id}</h3>
-                      <p className="mt-2 max-w-[64ch] text-[14px] leading-6 text-lookover-text-muted">
-                        {record.transcript_text || "Stored voice-run transcript"}
-                      </p>
-                      <div className="mt-3 text-[13px] text-lookover-text-muted">{findingsSummary(record)}</div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={toneFor(record.status)}>{record.status.replaceAll("_", " ")}</Badge>
-                      <Badge tone={toneFor(record.disposition)}>{record.disposition.replaceAll("_", " ")}</Badge>
-                    </div>
-                  </div>
-                </summary>
-                <div className="border-t border-lookover-border px-5 py-5">
-                  <div className="grid gap-5 xl:grid-cols-[0.92fr,1.08fr]">
-                    <div className="space-y-4">
-                      <div className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-4">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <div className="lookover-label">Created</div>
-                            <div className="mt-2 text-[14px] text-slate-900">{formatCompactDate(record.created_at)}</div>
-                          </div>
-                          <div>
-                            <div className="lookover-label">Applicability</div>
-                            <div className="mt-2 text-[14px] text-slate-900">{record.applicability.replaceAll("_", " ")}</div>
-                          </div>
-                          <div>
-                            <div className="lookover-label">Tenant / Deployer</div>
-                            <div className="mt-2 text-[14px] text-slate-900">{record.tenant} / {record.deployer}</div>
-                          </div>
-                          <div>
-                            <div className="lookover-label">Disclosure</div>
-                            <div className="mt-2 text-[14px] text-slate-900">{record.ai_disclosure_status.replaceAll("_", " ")}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-4">
-                        <div className="lookover-label">Transcript Preview</div>
-                        <div className="mt-3 space-y-3">
-                          {record.transcript_preview.map((turn, index) => (
-                            <div key={`${record.voice_run_id}-${index}`} className="rounded-xl border border-white/70 bg-white px-3 py-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">{turn.speaker}</span>
-                                <span className="text-[12px] text-lookover-text-muted">{turn.timestamp_seconds.toFixed(1)}s</span>
-                              </div>
-                              <p className="mt-2 text-[14px] leading-6 text-slate-900">{turn.text}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-4">
-                        <div className="lookover-label">Event Timeline</div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {record.timeline.map((item, index) => (
-                            <div key={`${record.voice_run_id}-timeline-${index}`} className="rounded-full border border-lookover-border bg-white px-3 py-2 text-[13px] text-slate-700">
-                              <span className="font-medium">{item.event}</span> at {item.timestamp_seconds.toFixed(1)}s
-                            </div>
-                          ))}
-                          {record.timeline.length === 0 ? (
-                            <div className="text-[13px] text-lookover-text-muted">No timeline events were returned for this run.</div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-lookover-border bg-white">
-                        <table className="min-w-full">
-                          <thead className="border-b border-lookover-border bg-slate-50/70">
-                            <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-lookover-text-muted">
-                              <th className="px-4 py-3.5">Article</th>
-                              <th className="px-4 py-3.5">Status</th>
-                              <th className="px-4 py-3.5">Severity</th>
-                              <th className="px-4 py-3.5">Reason</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {record.findings.map((finding, index) => (
-                              <tr key={`${record.voice_run_id}-finding-${index}`} className="border-b border-lookover-border/70 align-top last:border-b-0">
-                                <td className="lookover-table-cell font-medium">Article {finding.article}</td>
-                                <td className="lookover-table-cell">
-                                  <Badge tone={toneFor(finding.status)}>{finding.status.replaceAll("_", " ")}</Badge>
-                                </td>
-                                <td className="lookover-table-cell text-lookover-text-muted">{finding.severity}</td>
-                                <td className="lookover-table-cell text-lookover-text-muted">{finding.reason}</td>
-                              </tr>
-                            ))}
-                            {record.findings.length === 0 ? (
-                              <tr>
-                                <td colSpan={4} className="px-5 py-8 text-center text-[14px] text-lookover-text-muted">
-                                  No findings are stored for this run.
-                                </td>
-                              </tr>
-                            ) : null}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </details>
+              <VoiceRunCard
+                key={record.voice_run_id}
+                record={record}
+                open={Boolean(runOpenState[record.voice_run_id])}
+                onToggle={(open) =>
+                  setRunOpenState((value) => ({
+                    ...value,
+                    [record.voice_run_id]: open,
+                  }))
+                }
+                state={transcriptStateFor(record.voice_run_id)}
+                onStateChange={(updater) => updateTranscriptState(record.voice_run_id, updater)}
+              />
             ))}
             {(response?.items.length ?? 0) === 0 ? (
               <div className="rounded-2xl border border-lookover-border bg-slate-50/70 px-4 py-12 text-center text-[15px] text-lookover-text-muted">
