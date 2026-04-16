@@ -8,6 +8,7 @@ import {
   FileText,
   GitBranch,
   LayoutGrid,
+  ScanSearch,
   Settings,
   Shield,
   ShieldAlert,
@@ -19,31 +20,32 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  enabled: boolean;
+  activePrefixes?: string[];
 };
 
 const navItems: NavItem[] = [
-  { href: "/overview", label: "Overview", icon: LayoutGrid },
-  { href: "/traces", label: "Traces", icon: GitBranch },
-  { href: "/compliance", label: "Compliance", icon: Shield },
-  { href: "/risk", label: "Risk", icon: ShieldAlert },
-  { href: "/aibom", label: "AIBOM", icon: Boxes },
-  { href: "/violations", label: "Violations", icon: AlertTriangle },
-  { href: "/audit-export", label: "Audit Export", icon: FileText },
-  { href: "/gdpr", label: "GDPR", icon: UserRoundSearch },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/overview", label: "Overview", icon: LayoutGrid, enabled: true },
+  { href: "/traces", label: "Traces", icon: GitBranch, enabled: true, activePrefixes: ["/traces", "/shared"] },
+  { href: "/scans", label: "Pre Run", icon: ScanSearch, enabled: true, activePrefixes: ["/scans", "/pre-run"] },
+  { href: "/compliance", label: "Compliance", icon: Shield, enabled: false },
+  { href: "/risk", label: "Risk", icon: ShieldAlert, enabled: false },
+  { href: "/aibom", label: "AIBOM", icon: Boxes, enabled: false },
+  { href: "/violations", label: "Violations", icon: AlertTriangle, enabled: false },
+  { href: "/audit-export", label: "Audit Export", icon: FileText, enabled: false },
+  { href: "/gdpr", label: "GDPR", icon: UserRoundSearch, enabled: false },
+  { href: "/settings", label: "Settings", icon: Settings, enabled: false },
 ];
 
-function isActive(pathname: string, href: string) {
-  if (href === "/") {
+function isActive(pathname: string, item: NavItem) {
+  const prefixes = item.activePrefixes ?? [item.href];
+  if (item.href === "/") {
     return pathname === "/" || pathname === "/overview";
   }
-  if (href === "/overview") {
+  if (item.href === "/overview") {
     return pathname === "/" || pathname === "/overview";
   }
-  if (pathname.startsWith("/shared")) {
-    return href === "/traces";
-  }
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 function getInitials(email: string) {
@@ -88,19 +90,28 @@ export function Sidebar({
 
       <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-7">
         {navItems.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = isActive(pathname, item);
           const Icon = item.icon;
+          const itemClassName = cn(
+            "flex h-11 items-center gap-3 rounded-xl px-4 text-[14px] font-medium transition",
+            active && item.enabled
+              ? "bg-[#0f1115] text-white shadow-sm"
+              : item.enabled
+                ? "text-slate-500 hover:bg-black/[0.03] hover:text-slate-900"
+                : "cursor-not-allowed text-slate-300",
+          );
+
+          if (!item.enabled) {
+            return (
+              <div key={item.href} className={itemClassName} aria-disabled="true" title={`${item.label} is not active yet`}>
+                <Icon className="h-[17px] w-[17px]" />
+                <span>{item.label}</span>
+              </div>
+            );
+          }
+
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex h-11 items-center gap-3 rounded-xl px-4 text-[14px] font-medium text-slate-500 transition",
-                active
-                  ? "bg-[#0f1115] text-white shadow-sm"
-                  : "hover:bg-black/[0.03] hover:text-slate-900",
-              )}
-            >
+            <Link key={item.href} href={item.href} className={itemClassName}>
               <Icon className="h-[17px] w-[17px]" />
               <span>{item.label}</span>
             </Link>

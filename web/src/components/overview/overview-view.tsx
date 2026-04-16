@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BarChart3, CircleAlert, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Badge } from "@/components/ui/badge";
@@ -163,15 +164,16 @@ export function OverviewView({
               const tone =
                 outcome === "Failure" ? "danger" : outcome === "In Progress" ? "warning" : "danger";
               return (
-                <div
+                <Link
                   key={trace.trace_id}
+                  href={`/traces/${trace.trace_id}`}
                   className="grid grid-cols-[92px,1fr,auto,82px] items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-[14px] transition hover:border-lookover-border hover:bg-slate-50/80"
                 >
                   <span className="font-mono text-[14px] text-slate-500">{trace.trace_id.slice(0, 8)}</span>
                   <span className="truncate text-slate-900">{trace.agent_id || "agent"}</span>
                   <Badge tone={tone}>{outcome.toLowerCase()}</Badge>
                   <span className="text-right text-slate-500">{formatRelativeTime(trace.updated_at)}</span>
-                </div>
+                </Link>
               );
             })}
           </div>
