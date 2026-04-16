@@ -27,6 +27,13 @@ def test_home_page_renders(client):
     assert "Voice Logs Auditor" in response.text
 
 
+def test_healthcheck_returns_ok(client):
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_api_roundtrip(client):
     payload = {
         "call_id": "api-call-001",
