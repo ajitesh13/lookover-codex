@@ -471,8 +471,13 @@ export function TraceWorkspace({
         </div>
       </section>
 
-      <div className={cn("grid gap-4", selectedSpan ? "xl:grid-cols-[1.55fr,0.9fr]" : "grid-cols-1")}>
-        <section className="lookover-card overflow-hidden">
+      <div
+        className={cn(
+          "grid gap-4",
+          selectedSpan ? "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.9fr)]" : "grid-cols-1",
+        )}
+      >
+        <section className="lookover-card min-w-0 overflow-hidden">
           <div className="px-5 py-5">
             {flattened.map(({ node, depth }) => {
               const counts = findingCountsForSpan(detail, node.span.span_id);
@@ -540,7 +545,7 @@ export function TraceWorkspace({
         </section>
 
         {selectedSpan ? (
-          <section className="lookover-card px-6 py-5">
+          <section className="lookover-card min-w-0 overflow-hidden px-6 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge tone={getSpanTone(selectedSpan)} className="text-[14px]">
@@ -584,14 +589,14 @@ export function TraceWorkspace({
 
             <div className="mt-8 border-t border-lookover-border pt-7">
               <div className="lookover-label">Routing decision (LLM output)</div>
-              <div className="mt-4 rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 text-[14px] leading-7 text-slate-600">
+              <div className="mt-4 min-w-0 rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 text-[14px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
                 {extractRoutingDecision(selectedSpan)}
               </div>
             </div>
 
             <div className="mt-8 border-t border-lookover-border pt-7">
               <div className="lookover-label">Agent state changes from this node</div>
-              <pre className="mt-4 overflow-x-auto rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 font-mono text-[13px] leading-7 text-slate-600">
+              <pre className="mt-4 min-w-0 overflow-x-auto whitespace-pre-wrap break-words rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 font-mono text-[13px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
                 {extractStateChanges(selectedSpan)}
               </pre>
             </div>
@@ -605,11 +610,11 @@ export function TraceWorkspace({
               ) : (
                 <div className="mt-4 space-y-3">
                   {selectedEvidence.map((item) => (
-                    <div key={item.id} className="rounded-[14px] border border-lookover-border bg-slate-50 px-4 py-4">
+                    <div key={item.id} className="min-w-0 rounded-[14px] border border-lookover-border bg-slate-50 px-4 py-4">
                       <div className="text-[13px] font-medium uppercase tracking-[0.14em] text-lookover-text-muted">
                         {item.source} · {item.field_name}
                       </div>
-                      <pre className="mt-3 overflow-x-auto font-mono text-[13px] leading-7 text-slate-600">
+                      <pre className="mt-3 min-w-0 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
                         {safeText(item.value)}
                       </pre>
                     </div>
