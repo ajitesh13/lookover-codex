@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ record.call_id if record else "Audit detail" }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      {% if record %}
+      <section class="hero compact">
+        <p class="eyebrow">Audit result</p>
+        <h1>{{ record.call_id }}</h1>
+        <p class="lede">{{ record.disposition }} · {{ record.applicability.value }} · v{{ record.version }}</p>
+        <p class="lede">Tenant {{ record.tenant }}</p>
+        <a href="/audits">Back to audits</a>
+      </section>
+
+      <section class="card">
+        <h2>Findings</h2>
+        <ul class="finding-list">
+          {% for finding in record.findings %}
+          <li class="finding {{ finding.status.value }}">
+            <div>
+              <strong>Article {{ finding.article }}</strong>
+              <span>{{ finding.status.value }}</span>
+            </div>
+            <p>{{ finding.reason }}</p>
+            <small>{{ finding.evidence_type.value }} · {{ finding.evidence_span }}</small>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Transcript</h2>
+        <ul class="turn-list">
+          {% for turn in record.transcript_turns %}
+          <li><strong>{{ turn.speaker }}</strong> <span>{{ turn.timestamp_seconds }}s</span><p>{{ turn.text }}</p></li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Access history</h2>
+        <ul class="audit-list">
+          {% for event in access_history %}
+          <li><span>{{ event.action }}</span><span>{{ event.timestamp }}</span></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% else %}
+      <section class="card">
+        <p>Audit not found.</p>
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

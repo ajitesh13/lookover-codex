@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audit List</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero compact">
+        <p class="eyebrow">Audit index</p>
+        <h1>Stored audit records</h1>
+        <a href="/">Back to home</a>
+      </section>
+      <section class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Call</th>
+              <th>Tenant</th>
+              <th>Applicability</th>
+              <th>Disposition</th>
+              <th>Version</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for audit in audits %}
+            <tr>
+              <td><a href="/audits/{{ audit.call_id }}?tenant={{ audit.tenant }}">{{ audit.call_id }}</a></td>
+              <td>{{ audit.tenant }}</td>
+              <td>{{ audit.applicability.value }}</td>
+              <td>{{ audit.disposition }}</td>
+              <td>{{ audit.version }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No audits found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

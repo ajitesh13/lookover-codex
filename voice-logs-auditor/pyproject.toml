@@ -1,0 +1,29 @@
+[project]
+name = "voice-logs-auditor"
+version = "0.1.0"
+description = "FastAPI reference app for auditing voice agent logs against EU AI Act evidence requirements."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi==0.115.5",
+  "uvicorn[standard]==0.32.1",
+  "jinja2==3.1.4",
+  "pydantic==2.10.2",
+  "python-multipart==0.0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.0.2",
+  "httpx==0.28.1",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

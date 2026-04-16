@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice Logs Auditor</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">EU AI Act audit sandbox</p>
+        <h1>Voice Logs Auditor</h1>
+        <p class="lede">Ingest a voice transcript, score article-level findings, and inspect the latest evidence bundle.</p>
+      </section>
+
+      <section class="card">
+        <h2>Create an audit</h2>
+        <form action="/submit" method="post" class="stack">
+          <label>Call ID <input type="text" name="call_id" value="demo-call-001" required /></label>
+          <label>Tenant <input type="text" name="tenant" value="tenant-a" required /></label>
+          <label>Deployer <input type="text" name="deployer" value="voice-ops" required /></label>
+          <label>
+            Transcript
+            <textarea name="transcript" rows="8">Hello, I am an AI assistant calling about your account.
+Please note this call uses synthetic audio.
+I can transfer you to a human agent if needed.</textarea>
+          </label>
+          <div class="grid checks">
+            <label><input type="checkbox" name="synthetic_audio_used" checked /> Synthetic audio used</label>
+            <label><input type="checkbox" name="synthetic_audio_marked" checked /> Synthetic audio marked</label>
+            <label><input type="checkbox" name="emotion_recognition_used" /> Emotion recognition</label>
+            <label><input type="checkbox" name="biometric_categorisation_used" /> Biometric categorisation</label>
+            <label><input type="checkbox" name="decision_support_flag" /> Decision support</label>
+            <label><input type="checkbox" name="human_oversight_path_present" checked /> Human oversight path</label>
+            <label><input type="checkbox" name="high_risk_flag" /> High-risk confirmed</label>
+            <label><input type="checkbox" name="deepfake_like_content_flag" /> Deepfake-like content</label>
+          </div>
+          <button type="submit">Audit call</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Sample payloads</h2>
+        <ul class="sample-list">
+          {% for sample in samples %}
+          <li><strong>{{ sample.name }}</strong> <code>{{ sample.payload.call_id }}</code></li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Recent audits</h2>
+          <a href="/audits">View all</a>
+        </div>
+        <ul class="audit-list">
+          {% for audit in audits %}
+          <li>
+            <a href="/audits/{{ audit.call_id }}?tenant={{ audit.tenant }}">{{ audit.call_id }}</a>
+            <span>{{ audit.disposition }}</span>
+            <span>v{{ audit.version }}</span>
+          </li>
+          {% else %}
+          <li>No audits yet.</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
