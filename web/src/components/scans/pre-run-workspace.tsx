@@ -13,6 +13,8 @@ import shared from "@/components/ui/primitives.module.css";
 import styles from "./scans.module.css";
 
 export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
+  const findings = scan.findings ?? [];
+  const frameworks = scan.frameworks ?? [];
   const metrics = [
     {
       label: "Readiness",
@@ -31,7 +33,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
     },
     {
       label: "Findings",
-      value: String(scan.findings.length),
+      value: String(findings.length),
       hint: "Total findings carried into this pre-run report.",
     },
   ];
@@ -49,7 +51,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
           <div className={styles.detailTitle}>
             <h2>{scan.scan_id}</h2>
             <p>
-              Frameworks: {scan.frameworks.join(", ") || "none"} · Created {formatCompactDate(scan.created_at)}
+              Frameworks: {frameworks.join(", ") || "none"} · Created {formatCompactDate(scan.created_at)}
             </p>
           </div>
           <div className={styles.detailMeta}>
@@ -69,7 +71,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
           <div className={shared.stack}>
             <div className={styles.findingTitle}>Mapped controls</div>
             <div className={styles.evidenceList}>
-              {scan.findings.map((finding) => (
+              {findings.map((finding) => (
                 <div key={finding.id} className={styles.evidenceItem}>
                   <div className={styles.evidenceLabel}>{finding.rule_id}</div>
                   <div className={styles.evidenceValue}>{finding.control_refs.join(", ") || "No mapped controls"}</div>
@@ -97,7 +99,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
       <SectionCard className={styles.detailCard}>
         <div className={styles.findingTitle}>Findings</div>
         <div className={styles.findingList}>
-          {scan.findings.map((finding) => (
+          {findings.map((finding) => (
             <div key={finding.id} className={`${shared.cardInset} ${styles.findingCard}`}>
               <div className={styles.findingTitle}>{finding.title}</div>
               <div className={styles.findingMeta}>
@@ -117,7 +119,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
         <SectionCard className={styles.detailCard}>
           <div className={styles.findingTitle}>Evidence</div>
           <div className={styles.evidenceList}>
-            {scan.findings.flatMap((finding) =>
+            {findings.flatMap((finding) =>
               Object.entries(finding.evidence ?? {}).map(([key, value]) => (
                 <div key={`${finding.id}-${key}`} className={styles.evidenceItem}>
                   <div className={styles.evidenceLabel}>{finding.title}</div>
@@ -133,7 +135,7 @@ export function PreRunWorkspace({ scan }: { scan: ApiPreRunScan }) {
         <SectionCard className={styles.detailCard}>
           <div className={styles.findingTitle}>Remediation</div>
           <div className={styles.evidenceList}>
-            {scan.findings.map((finding) => (
+            {findings.map((finding) => (
               <div key={`${finding.id}-remediation`} className={styles.evidenceItem}>
                 <div className={styles.evidenceLabel}>{finding.rule_id}</div>
                 <div className={styles.evidenceValue}>{finding.remediation}</div>

@@ -112,6 +112,151 @@ type ApiFetchResult<T> = {
   status: number | null;
 };
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item));
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeTraceSummary(trace: Partial<ApiTraceSummary> | null | undefined): ApiTraceSummary {
+  return {
+    trace_id: String(trace?.trace_id ?? ""),
+    session_id: String(trace?.session_id ?? ""),
+    agent_id: String(trace?.agent_id ?? ""),
+    agent_version: String(trace?.agent_version ?? ""),
+    framework: String(trace?.framework ?? ""),
+    model_id: String(trace?.model_id ?? ""),
+    model_provider: String(trace?.model_provider ?? ""),
+    model_version: String(trace?.model_version ?? ""),
+    ai_act_risk_tier: String(trace?.ai_act_risk_tier ?? ""),
+    use_case_category: String(trace?.use_case_category ?? ""),
+    environment: String(trace?.environment ?? ""),
+    overall_risk_score: asNumber(trace?.overall_risk_score),
+    status: String(trace?.status ?? ""),
+    created_at: String(trace?.created_at ?? ""),
+    updated_at: String(trace?.updated_at ?? ""),
+    metadata: asRecord(trace?.metadata),
+    span_count: asNumber(trace?.span_count),
+  };
+}
+
+function normalizeSpan(span: Partial<ApiSpan> | null | undefined): ApiSpan {
+  return {
+    span_id: String(span?.span_id ?? ""),
+    trace_id: String(span?.trace_id ?? ""),
+    parent_span_id: String(span?.parent_span_id ?? ""),
+    name: String(span?.name ?? ""),
+    event_type: String(span?.event_type ?? ""),
+    status: String(span?.status ?? ""),
+    start_time: String(span?.start_time ?? ""),
+    end_time: String(span?.end_time ?? ""),
+    payload: asRecord(span?.payload),
+  };
+}
+
+function normalizeEvidence(evidence: Partial<ApiEvidence> | null | undefined): ApiEvidence {
+  return {
+    id: String(evidence?.id ?? ""),
+    trace_id: String(evidence?.trace_id ?? ""),
+    span_id: String(evidence?.span_id ?? ""),
+    source: String(evidence?.source ?? ""),
+    field_name: String(evidence?.field_name ?? ""),
+    value: asRecord(evidence?.value),
+    previous_hash: String(evidence?.previous_hash ?? ""),
+    payload_hash: String(evidence?.payload_hash ?? ""),
+    chain_hash: String(evidence?.chain_hash ?? ""),
+    signed_chain_hash: String(evidence?.signed_chain_hash ?? ""),
+    created_at: String(evidence?.created_at ?? ""),
+  };
+}
+
+function normalizeControlResult(result: Partial<ApiControlResult> | null | undefined): ApiControlResult {
+  return {
+    id: String(result?.id ?? ""),
+    trace_id: String(result?.trace_id ?? ""),
+    span_id: result?.span_id ? String(result.span_id) : undefined,
+    framework: String(result?.framework ?? ""),
+    control_id: String(result?.control_id ?? ""),
+    title: String(result?.title ?? ""),
+    citation: String(result?.citation ?? ""),
+    status: String(result?.status ?? ""),
+    severity: String(result?.severity ?? ""),
+    priority: String(result?.priority ?? ""),
+    reasoning: String(result?.reasoning ?? ""),
+    residual_risk: String(result?.residual_risk ?? ""),
+    remediation: String(result?.remediation ?? ""),
+    observed_evidence: asRecord(result?.observed_evidence),
+    created_at: String(result?.created_at ?? ""),
+  };
+}
+
+function normalizeTraceDetail(detail: Partial<ApiTraceDetail> | null | undefined): ApiTraceDetail | null {
+  if (!detail?.trace) {
+    return null;
+  }
+
+  return {
+    trace: normalizeTraceSummary(detail.trace),
+    spans: Array.isArray(detail.spans) ? detail.spans.map(normalizeSpan) : [],
+    evidence: Array.isArray(detail.evidence) ? detail.evidence.map(normalizeEvidence) : [],
+    findings: Array.isArray(detail.findings) ? detail.findings.map(normalizeControlResult) : [],
+    control_summary: asRecord(detail.control_summary) as Record<string, number>,
+  };
+}
+
+function normalizePreRunFinding(finding: Partial<ApiPreRunFinding> | null | undefined): ApiPreRunFinding {
+  return {
+    id: String(finding?.id ?? ""),
+    rule_id: String(finding?.rule_id ?? ""),
+    title: String(finding?.title ?? ""),
+    severity: String(finding?.severity ?? ""),
+    status: String(finding?.status ?? ""),
+    control_refs: asStringArray(finding?.control_refs),
+    evidence: asRecord(finding?.evidence),
+    remediation: String(finding?.remediation ?? ""),
+  };
+}
+
+function normalizePreRunScan(scan: Partial<ApiPreRunScan> | null | undefined): ApiPreRunScan {
+  return {
+    scan_id: String(scan?.scan_id ?? ""),
+    project_path: String(scan?.project_path ?? ""),
+    strict_mode: Boolean(scan?.strict_mode),
+    readiness_score: asNumber(scan?.readiness_score),
+    strict_result: String(scan?.strict_result ?? ""),
+    frameworks: asStringArray(scan?.frameworks),
+    summary: asRecord(scan?.summary),
+    findings: Array.isArray(scan?.findings) ? scan.findings.map(normalizePreRunFinding) : [],
+    created_at: String(scan?.created_at ?? ""),
+  };
+}
+
+function normalizeShareDetail(share: Partial<ApiShareDetail> | null | undefined): ApiShareDetail | null {
+  const trace = normalizeTraceDetail(share?.trace);
+  if (!share?.share_id || !trace) {
+    return null;
+  }
+
+  return {
+    share_id: String(share.share_id),
+    mode: share.mode === "audit_log_only" ? "audit_log_only" : "audit_log_plus_evaluation",
+    trace,
+    read_only: Boolean(share.read_only),
+  };
+}
+
 async function fetchJsonDetailed<T>(
   path: string,
   init: RequestInit = {},
@@ -151,20 +296,21 @@ async function fetchJson<T>(path: string, init: RequestInit = {}, origin?: strin
 
 export async function listTraces(origin?: string) {
   const payload = await fetchJson<{ items: ApiTraceSummary[] }>("/v1/traces", {}, origin);
-  return payload?.items ?? [];
+  return Array.isArray(payload?.items) ? payload.items.map(normalizeTraceSummary) : [];
 }
 
 export async function getTraceDetail(traceId: string, origin?: string) {
-  return await fetchJson<ApiTraceDetail>(`/v1/traces/${traceId}`, {}, origin);
+  return normalizeTraceDetail(await fetchJson<ApiTraceDetail>(`/v1/traces/${traceId}`, {}, origin));
 }
 
 export async function listPreRunScans(origin?: string) {
   const payload = await fetchJson<{ items: ApiPreRunScan[] }>("/v1/prerun/scans", {}, origin);
-  return payload?.items ?? [];
+  return Array.isArray(payload?.items) ? payload.items.map(normalizePreRunScan) : [];
 }
 
 export async function getPreRunScan(scanId: string, origin?: string) {
-  return await fetchJson<ApiPreRunScan>(`/v1/prerun/scans/${scanId}`, {}, origin);
+  const scan = await fetchJson<ApiPreRunScan>(`/v1/prerun/scans/${scanId}`, {}, origin);
+  return scan ? normalizePreRunScan(scan) : null;
 }
 
 export async function getLatestTraceId() {
@@ -186,12 +332,14 @@ export async function getSharedTrace(shareId: string, origin?: string) {
     headersInit.Authorization = `Bearer ${token}`;
   }
 
-  return await fetchJson<ApiShareDetail>(
-    `/v1/shared/${shareId}`,
-    {
-      headers: headersInit,
-    },
-    origin,
+  return normalizeShareDetail(
+    await fetchJson<ApiShareDetail>(
+      `/v1/shared/${shareId}`,
+      {
+        headers: headersInit,
+      },
+      origin,
+    ),
   );
 }
 

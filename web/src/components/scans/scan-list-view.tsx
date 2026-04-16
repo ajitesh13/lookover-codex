@@ -49,7 +49,7 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
           </thead>
           <tbody>
             {pageItems.map((scan) => {
-              const findings = scan.findings.length;
+              const findings = scan.findings?.length ?? 0;
               const tone = getToneFromStatus(scan.strict_result);
               return (
                 <tr
@@ -75,7 +75,7 @@ export function ScanListView({ scans }: { scans: ApiPreRunScan[] }) {
                     </Badge>
                   </td>
                   <td className={shared.tableMeta}>{Math.round(scan.readiness_score)}%</td>
-                  <td className={shared.tableMeta}>{scan.frameworks.join(", ") || "—"}</td>
+                  <td className={shared.tableMeta}>{scan.frameworks?.join(", ") || "—"}</td>
                   <td className={shared.tableMeta}>{findings}</td>
                   <td className={shared.tableMeta}>{formatCompactDate(scan.created_at)}</td>
                 </tr>
