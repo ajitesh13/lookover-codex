@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CollapsibleJson } from "@/components/ui/collapsible-json";
 import type { ApiSpan, ApiTraceDetail, ShareMode } from "@/lib/lookover-api";
 import {
   countFindingsByCategory,
@@ -178,12 +179,12 @@ function extractRoutingDecision(span: ApiSpan) {
 
 function extractStateChanges(span: ApiSpan) {
   const payload = span.payload ?? {};
-  if (payload.state_after) return safeText(payload.state_after);
-  if (payload.state_changes) return safeText(payload.state_changes);
-  if (payload.outputs) return safeText(payload.outputs);
-  if (payload.inputs) return safeText(payload.inputs);
-  if (payload.next_worker) return safeText({ next_worker: payload.next_worker });
-  return safeText(payload);
+  if (payload.state_after) return payload.state_after;
+  if (payload.state_changes) return payload.state_changes;
+  if (payload.outputs) return payload.outputs;
+  if (payload.inputs) return payload.inputs;
+  if (payload.next_worker) return { next_worker: payload.next_worker };
+  return payload;
 }
 
 function ShareActions({ traceId }: { traceId: string }) {
@@ -350,6 +351,57 @@ function FindingPanel({
   );
 }
 
+function StepSection({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3 rounded-[16px] border border-lookover-border bg-slate-50/65 p-4">
+      <div>
+        <div className="lookover-label">{eyebrow}</div>
+        <h3 className="mt-2 text-[15px] font-semibold tracking-[-0.02em] text-slate-900">{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StepFindingCard({ finding }: { finding: ApiTraceDetail["findings"][number] }) {
+  const tone = getToneFromStatus(finding.status);
+  const toneClass =
+    tone === "danger"
+      ? "border-rose-200 bg-rose-50/70"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50/70"
+        : "border-emerald-200 bg-emerald-50/70";
+
+  return (
+    <div className={cn("rounded-[14px] border px-4 py-4", toneClass)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : "success"}>
+              {finding.status.toLowerCase()}
+            </Badge>
+            <Badge tone="neutral">{finding.framework}</Badge>
+            <Badge tone="neutral">{finding.control_id}</Badge>
+            {finding.severity ? <Badge tone={tone === "danger" ? "danger" : "warning"}>{finding.severity.toLowerCase()}</Badge> : null}
+          </div>
+          <div className="text-[15px] font-semibold leading-6 text-slate-900">{finding.title}</div>
+        </div>
+      </div>
+      <div className="mt-3 text-[13px] leading-6 text-lookover-text-muted">
+        {finding.reasoning || finding.remediation}
+      </div>
+    </div>
+  );
+}
+
 export function TraceWorkspace({
   detail,
   readOnly = false,
@@ -369,6 +421,7 @@ export function TraceWorkspace({
   const [showFindings, setShowFindings] = useState(shareMode !== "audit_log_only");
   const selectedSpan = visibleSpans.find((item) => item.span_id === selectedSpanId) ?? null;
   const selectedEvidence = detail.evidence.filter((item) => item.span_id === selectedSpan?.span_id);
+  const selectedFindings = detail.findings.filter((item) => item.span_id === selectedSpan?.span_id);
   const grouped = countFindingsByCategory(detail.findings);
   const showCompliance = shareMode !== "audit_log_only";
   const outcome = deriveTraceOutcome(detail.trace);
@@ -377,6 +430,11 @@ export function TraceWorkspace({
     violations: detail.findings.filter((item) => getToneFromStatus(item.status) === "danger"),
     gaps: detail.findings.filter((item) => getToneFromStatus(item.status) === "warning"),
     covered: detail.findings.filter((item) => getToneFromStatus(item.status) === "neutral"),
+  };
+  const selectedFindingGroups = {
+    violations: selectedFindings.filter((item) => getToneFromStatus(item.status) === "danger"),
+    gaps: selectedFindings.filter((item) => getToneFromStatus(item.status) === "warning"),
+    covered: selectedFindings.filter((item) => getToneFromStatus(item.status) === "neutral"),
   };
 
   async function copyTraceId() {
@@ -474,7 +532,7 @@ export function TraceWorkspace({
       <div
         className={cn(
           "grid gap-4",
-          selectedSpan ? "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.9fr)]" : "grid-cols-1",
+          selectedSpan ? "xl:grid-cols-2" : "grid-cols-1",
         )}
       >
         <section className="lookover-card min-w-0 overflow-hidden">
@@ -545,7 +603,7 @@ export function TraceWorkspace({
         </section>
 
         {selectedSpan ? (
-          <section className="lookover-card min-w-0 overflow-hidden px-6 py-5">
+          <section className="lookover-card min-w-0 overflow-hidden px-6 py-5 xl:max-h-[calc(100vh-9.5rem)] xl:overflow-y-auto xl:overscroll-contain">
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <Badge tone={getSpanTone(selectedSpan)} className="text-[14px]">
@@ -587,40 +645,74 @@ export function TraceWorkspace({
               </div>
             </div>
 
-            <div className="mt-8 border-t border-lookover-border pt-7">
-              <div className="lookover-label">Routing decision (LLM output)</div>
-              <div className="mt-4 min-w-0 rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 text-[14px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
-                {extractRoutingDecision(selectedSpan)}
-              </div>
-            </div>
+            <div className="mt-8 space-y-4 border-t border-lookover-border pt-7">
+              <StepSection eyebrow="Step output" title="Routing decision (LLM output)">
+                <CollapsibleJson
+                  value={extractRoutingDecision(selectedSpan)}
+                  className="border-indigo-100 bg-indigo-50/80"
+                />
+              </StepSection>
 
-            <div className="mt-8 border-t border-lookover-border pt-7">
-              <div className="lookover-label">Agent state changes from this node</div>
-              <pre className="mt-4 min-w-0 overflow-x-auto whitespace-pre-wrap break-words rounded-[14px] border border-indigo-100 bg-indigo-50/80 px-4 py-4 font-mono text-[13px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
-                {extractStateChanges(selectedSpan)}
-              </pre>
-            </div>
+              <StepSection eyebrow="Step output" title="Agent state changes from this node">
+                <CollapsibleJson
+                  value={extractStateChanges(selectedSpan)}
+                  className="border-indigo-100 bg-indigo-50/80"
+                />
+              </StepSection>
 
-            <div className="mt-8 border-t border-lookover-border pt-7">
-              <div className="lookover-label">Raw evidence</div>
-              {selectedEvidence.length === 0 ? (
-                <div className="mt-4 rounded-[14px] border border-dashed border-lookover-border px-4 py-4 text-[14px] text-lookover-text-muted">
-                  No evidence rows were attached to this node.
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {selectedEvidence.map((item) => (
-                    <div key={item.id} className="min-w-0 rounded-[14px] border border-lookover-border bg-slate-50 px-4 py-4">
-                      <div className="text-[13px] font-medium uppercase tracking-[0.14em] text-lookover-text-muted">
-                        {item.source} · {item.field_name}
-                      </div>
-                      <pre className="mt-3 min-w-0 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-7 text-slate-600 [overflow-wrap:anywhere]">
-                        {safeText(item.value)}
-                      </pre>
+              <StepSection eyebrow="Screening" title="Controls evaluated on this step">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-3">
+                    <div className="lookover-label">Violations</div>
+                    <div className="mt-2 text-[24px] font-semibold leading-none tracking-[-0.03em] text-rose-600">
+                      {selectedFindingGroups.violations.length}
                     </div>
-                  ))}
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                    <div className="lookover-label">Gaps</div>
+                    <div className="mt-2 text-[24px] font-semibold leading-none tracking-[-0.03em] text-amber-600">
+                      {selectedFindingGroups.gaps.length}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                    <div className="lookover-label">Covered</div>
+                    <div className="mt-2 text-[24px] font-semibold leading-none tracking-[-0.03em] text-emerald-600">
+                      {selectedFindingGroups.covered.length}
+                    </div>
+                  </div>
                 </div>
-              )}
+                {selectedFindings.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-lookover-border bg-white/70 px-4 py-4 text-[14px] text-lookover-text-muted">
+                    No screening findings were attached to this agent step.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedFindings.map((finding) => (
+                      <StepFindingCard key={finding.id} finding={finding} />
+                    ))}
+                  </div>
+                )}
+              </StepSection>
+
+              <StepSection eyebrow="Evidence" title="Raw evidence">
+                {selectedEvidence.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-lookover-border bg-white/70 px-4 py-4 text-[14px] text-lookover-text-muted">
+                    No evidence rows were attached to this node.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedEvidence.map((item) => (
+                      <div key={item.id} className="min-w-0 rounded-[14px] border border-lookover-border bg-white/80 px-4 py-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone="neutral">{item.source}</Badge>
+                          <span className="text-[13px] font-medium text-slate-900">{item.field_name}</span>
+                        </div>
+                        <CollapsibleJson value={item.value} className="mt-3 bg-slate-50/80" defaultExpanded={false} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </StepSection>
             </div>
           </section>
         ) : null}
